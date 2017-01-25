@@ -4,7 +4,7 @@ project(mds)
 
 add_definitions(-DAOPROJECT)
 
-set(CMAKE_CXX_FLAGS "-O3 -ggdb -Wvla -Wall -DNDEBUG -march=native -std=c++0x")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -ggdb -Wvla -Wall -DNDEBUG -march=native -std=c++0x")
 
 FIND_PACKAGE( OpenMP REQUIRED)
 if(OPENMP_FOUND)

@@ -1,7 +1,7 @@
 #ifdef AOPROJECT
 #include "multidirsolver.h"
 #else
-#include <DPPP/multidirsolver.h>
+#include <DPPP_DDECal/multidirsolver.h>
 #endif
 
 using namespace arma;
@@ -34,7 +34,7 @@ void MultiDirSolver::init(size_t nAntennas,
 
 MultiDirSolver::SolveResult MultiDirSolver::process(std::vector<Complex *>& data,
   std::vector<std::vector<Complex *> >& modelData,
-  std::vector<std::vector<DComplex> >& solutions) const
+  std::vector<std::vector<DComplex> >& solutions, double time) const
 {
   const size_t nTimes = data.size();
   SolveResult result;
@@ -45,6 +45,8 @@ MultiDirSolver::SolveResult MultiDirSolver::process(std::vector<Complex *>& data
     result.iterations = 0;
     return result;
   }
+
+  result._results.resize(_constraints.size());
   
   // Model matrix ant x [N x D] and visibility matrix ant x [N x 1],
   // for each channelblock
@@ -53,7 +55,7 @@ MultiDirSolver::SolveResult MultiDirSolver::process(std::vector<Complex *>& data
   std::vector<std::vector<cx_vec> > vs(_nChannelBlocks);
   for(size_t chBlock=0; chBlock!=_nChannelBlocks; ++chBlock)
   {
-    solutions[chBlock].assign(_nDirections * _nAntennas, 1.0);
+    //solutions[chBlock].assign(_nDirections * _nAntennas, 1.0);
     nextSolutions[chBlock].resize(_nDirections * _nAntennas);
     const size_t
       channelIndexStart = chBlock * _nChannels / _nChannelBlocks,
@@ -100,7 +102,9 @@ MultiDirSolver::SolveResult MultiDirSolver::process(std::vector<Complex *>& data
       }
     }
     for(size_t i=0; i!=_constraints.size(); ++i)
-      _constraints[i]->Apply(nextSolutions);
+    {
+      result._results[i] = _constraints[i]->Apply(nextSolutions, time);
+    }
     
     //  Calculate the norm of the difference between the old and new solutions
     for(size_t chBlock=0; chBlock!=_nChannelBlocks; ++chBlock)
@@ -169,7 +173,7 @@ void MultiDirSolver::performSolveIteration(size_t channelBlockIndex,
         {
           size_t dataIndex1 = ch-channelIndexStart + (timeIndex + antenna1 * nTimes) * curChannelBlockSize;
           size_t dataIndex2 = ch-channelIndexStart + (timeIndex + antenna2 * nTimes) * curChannelBlockSize;
-          //std::cout << iteration << ' ' << row << ' ' << timeIndex << ' ';
+          //std::cout << "timeindex" << timeIndex << ' ';
           for(size_t d=0; d!=_nDirections; ++d)
           {
             std::complex<double> predicted = modelPtrs[d][0] + modelPtrs[d][3];

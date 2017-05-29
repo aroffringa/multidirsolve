@@ -92,7 +92,9 @@ int main(int argc, char* argv[])
 	}
 	
 	std::vector<std::vector<std::complex<double> > > solutions(nChanBlocks);
-	MultiDirSolver::SolveResult result = mds.process(data, modelData, solutions);
+	for(auto& vec : solutions)
+		vec.assign(nDir * nAnt, 1.0);
+	MultiDirSolver::SolveResult result = mds.process(data, modelData, solutions, 0.0);
 	std::cout << '\n';
 	for(size_t ch=0; ch!=nChanBlocks; ++ch)
 	{

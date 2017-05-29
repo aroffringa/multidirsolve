@@ -2,13 +2,13 @@
 #include "Constraint.h"
 #include <omp.h> // for tec constraints
 #else
-#include <DPPP/Constraint.h>
+#include <DPPP_DDECal/Constraint.h>
 #include <Common/OpenMP.h>
 #endif
 
 
-Constraint::Result PhaseConstraint::Apply(
-    std::vector<std::vector<dcomplex> >& solutions)
+std::vector<Constraint::Result> PhaseConstraint::Apply(
+    std::vector<std::vector<dcomplex> >& solutions, double)
 {
   for (uint ch=0; ch<solutions.size(); ++ch) {
     for (uint solIndex=0; solIndex<solutions[ch].size(); ++solIndex) {
@@ -16,7 +16,7 @@ Constraint::Result PhaseConstraint::Apply(
     }
   }
 
-  return Constraint::Result();
+  return std::vector<Constraint::Result>();
 }
 
 TECConstraint::TECConstraint(Mode mode) :
@@ -55,10 +55,21 @@ void TECConstraint::init(size_t nAntennas, size_t nDirections,
   }
 }
 
-Constraint::Result TECConstraint::Apply(std::vector<std::vector<dcomplex> >& solutions)
+std::vector<Constraint::Result> TECConstraint::Apply(
+    std::vector<std::vector<dcomplex> >& solutions, double)
 {
-  TECConstraint::TECResult res;
-  res.tecvals.resize(_nAntennas*_nDirections);
+  std::vector<Constraint::Result> res(2);
+
+  res[0].vals.resize(_nAntennas*_nDirections);
+  res[0].axes="ant,dir,freq";
+  res[0].name="tec";
+  res[0].dims.resize(3);
+  res[0].dims[0]=_nAntennas;
+  res[0].dims[1]=_nDirections;
+  res[0].dims[2]=1;
+  res[1]=res[0];
+  res[1].name="scalarphase";
+  
 #pragma omp parallel for
   for(size_t solutionIndex = 0; solutionIndex<_nAntennas*_nDirections; ++solutionIndex)
   {
@@ -80,8 +91,8 @@ Constraint::Result TECConstraint::Apply(std::vector<std::vector<dcomplex> >& sol
       _phaseFitters[thread].FitDataToTEC2Model(alpha, beta);
     }
 
-    res.tecvals[solutionIndex].first = alpha;
-    res.tecvals[solutionIndex].second = beta;
+    res[0].vals[solutionIndex] = alpha / 8.44797245e9;
+    res[1].vals[solutionIndex] = beta;
     
     for(size_t ch=0; ch!=_nChannelBlocks; ++ch) {
      solutions[ch][solutionIndex] = std::polar<double>(1.0, _phaseFitters[thread].PhaseData()[ch]);
@@ -89,4 +100,32 @@ Constraint::Result TECConstraint::Apply(std::vector<std::vector<dcomplex> >& sol
   }
 
   return res;
+}
+
+std::vector<Constraint::Result> CoreConstraint::Apply(
+    std::vector<std::vector<dcomplex> >& solutions, double)
+{
+  for (uint ch=0; ch<solutions.size(); ++ch) {
+    std::vector<dcomplex> coreSolutions(_nDirections, 0.0);
+    // Calculate the sum of solutions over the core stations
+    for(std::set<size_t>::const_iterator antennaIter = _coreAntennas.begin(); antennaIter!=_coreAntennas.end(); ++antennaIter)
+    {
+      size_t startIndex = (*antennaIter)*_nDirections;
+      for(size_t direction = 0; direction != _nDirections; ++direction)
+        coreSolutions[direction] += solutions[ch][startIndex + direction];
+    }
+    
+    // Divide by nr of core stations to get the mean solution
+    for(std::vector<dcomplex>::iterator solutionIter = coreSolutions.begin(); solutionIter!=coreSolutions.end(); ++solutionIter)
+      (*solutionIter) /= _coreAntennas.size();
+    
+    // Assign all core stations to the mean solution
+    for(std::set<size_t>::const_iterator antennaIter = _coreAntennas.begin(); antennaIter!=_coreAntennas.end(); ++antennaIter)
+    {
+      size_t startIndex = (*antennaIter)*_nDirections;
+      for(size_t direction = 0; direction != _nDirections; ++direction)
+        solutions[ch][startIndex + direction] = coreSolutions[direction];
+    }
+  }
+  return std::vector<Constraint::Result>();
 }

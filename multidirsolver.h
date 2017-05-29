@@ -7,7 +7,7 @@
 #define UPTR std::unique_ptr
 #else
 #include <DPPP/phasefitter.h>
-#include <DPPP/Constraint.h>
+#include <DPPP_DDECal/Constraint.h>
 #define UPTR std::auto_ptr
 #endif
 
@@ -25,7 +25,7 @@ public:
   
   struct SolveResult {
     size_t iterations;
-    std::vector<Constraint::Result*> _results;
+    std::vector<std::vector<Constraint::Result> > _results;
   };
   
   enum CalibrationMode { CalibrateComplexGain, 
@@ -42,7 +42,7 @@ public:
   // mdata[i] is een pointer voor tijdstap i naar arrays van ndir model data pointers (elk van die data pointers staat in zelfde volgorde als data)
   // solutions[ch] is een pointer voor channelblock ch naar antenna x directions oplossingen.
   SolveResult process(std::vector<Complex*>& data, std::vector<std::vector<Complex* > >& modelData,
-    std::vector<std::vector<DComplex> >& solutions) const;
+    std::vector<std::vector<DComplex> >& solutions, double time) const;
   
   void set_mode(CalibrationMode mode) { _mode = mode; }
   

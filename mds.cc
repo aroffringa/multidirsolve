@@ -75,13 +75,19 @@ int main(int argc, char* argv[])
 						gain2ant1 = gain2;
 						gain3ant1 = gain3;
 					}
+					if(a2 == 1)
+					{
+						gain1ant2 = 1.0;
+						gain2ant2 = 1.0;
+						gain3ant2 = 1.0;
+					}
 					gain1ant2 = a2;
 					gain2ant2 = gain2;
 					gain3ant2 = gain3;
 					dataPtr[baselineIndex] =
-						gain1ant1 * gain1ant2 * model1Ptr[baselineIndex] +
-						gain2ant1 * gain2ant2 * model2Ptr[baselineIndex] +
-						gain3ant1 * gain3ant2 * model3Ptr[baselineIndex];
+						gain1ant1 * std::conj(gain1ant2) * model1Ptr[baselineIndex] +
+						gain2ant1 * std::conj(gain2ant2) * model2Ptr[baselineIndex] +
+						gain3ant1 * std::conj(gain3ant2) * model3Ptr[baselineIndex];
 					++baselineIndex;
 				}
 			}
@@ -116,4 +122,3 @@ int main(int argc, char* argv[])
 		data.pop_back();
 	}	
 }
-

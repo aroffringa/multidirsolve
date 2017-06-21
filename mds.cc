@@ -3,8 +3,8 @@
 int main(int argc, char* argv[])
 {
 	typedef std::complex<float> cf;
-	MultiDirSolver mds(1000, 1e-6, 0.5);
-	size_t nPol = 4, nAnt = 200, nDir = 3, nChan = 10, nChanBlocks = 1, nTimes = 1, nBl=nAnt*(nAnt-1)/2;
+	MultiDirSolver mds(1000, 1e-7, 0.5);
+	size_t nPol = 4, nAnt = 200, nDir = 3, nChan = 10, nChanBlocks = 2, nTimes = 1, nBl=nAnt*(nAnt-1)/2;
 	
 	std::vector<int> ant1s, ant2s;
 	for(size_t a1=0; a1!=nAnt; ++a1)
@@ -30,6 +30,22 @@ int main(int argc, char* argv[])
 	//mds.add_constraint(&tecConstraint);
 	
 	cf gain1(0.31415926535, 0.0), gain2(2.0, 1.0), gain3(0.0, 3.0);
+	std::vector<cf> inputSolutions(nAnt * nDir);
+	for(size_t a=0; a!=nAnt; ++a)
+	{
+		if(a == 1)
+		{
+			inputSolutions[a*nDir + 0] = 1.0;
+			inputSolutions[a*nDir + 1] = 1.0;
+			inputSolutions[a*nDir + 2] = 1.0;
+		}
+		else {
+			inputSolutions[a*nDir + 0] = a;
+			inputSolutions[a*nDir + 1] = gain2;
+			inputSolutions[a*nDir + 2] = gain3;
+		}
+	}
+	
 	//cf gain1(0.5*M_SQRT2, 0.5*M_SQRT2), gain2(0.0, 1.0), gain3(-0.5*M_SQRT2, -0.5*M_SQRT2);
 	std::vector<cf*> data;
 	std::vector<std::vector<cf*>> modelData;
@@ -42,18 +58,19 @@ int main(int argc, char* argv[])
 		
 		for(size_t i=0; i!=nChan * nBl; ++i)
 		{
-			model1Ptr[i*4 + 0] = 1.0;
+			float unit = 1.0 * (i+1);
+			model1Ptr[i*4 + 0] = unit;
 			model1Ptr[i*4 + 1] = 0.0;
 			model1Ptr[i*4 + 2] = 0.0;
-			model1Ptr[i*4 + 3] = 1.0;
-			model2Ptr[i*4 + 0] = (i%2==0) ? cf(1.0, 0.0) : 0.0;
+			model1Ptr[i*4 + 3] = unit;
+			model2Ptr[i*4 + 0] = (i%2==0) ? unit : 0.0;
 			model2Ptr[i*4 + 1] = 0.0;
 			model2Ptr[i*4 + 2] = 0.0;
-			model2Ptr[i*4 + 3] = (i%2==0) ? cf(1.0, 0.0) : 0.0;
-			model3Ptr[i*4 + 0] = (i%3==0) ? cf(1.0, 0.0) : 0.0;
+			model2Ptr[i*4 + 3] = (i%2==0) ? unit : 0.0;
+			model3Ptr[i*4 + 0] = (i%3==0) ? unit : 0.0;
 			model3Ptr[i*4 + 1] = 0.0;
 			model3Ptr[i*4 + 2] = 0.0;
-			model3Ptr[i*4 + 3] = (i%3==0) ? cf(1.0, 0.0) : 0.0;
+			model3Ptr[i*4 + 3] = (i%3==0) ? unit : 0.0;
 		}
 		
 		size_t baselineIndex = 0;
@@ -64,26 +81,12 @@ int main(int argc, char* argv[])
 				for(size_t j=0; j!=nPol * nChan; ++j)
 				{
 					cf gain1ant1, gain2ant1, gain3ant1, gain1ant2, gain2ant2, gain3ant2;
-					if(a1 == 1)
-					{
-						gain1ant1 = 1.0;
-						gain2ant1 = 1.0;
-						gain3ant1 = 1.0;
-					}
-					else {
-						gain1ant1 = a1;
-						gain2ant1 = gain2;
-						gain3ant1 = gain3;
-					}
-					if(a2 == 1)
-					{
-						gain1ant2 = 1.0;
-						gain2ant2 = 1.0;
-						gain3ant2 = 1.0;
-					}
-					gain1ant2 = a2;
-					gain2ant2 = gain2;
-					gain3ant2 = gain3;
+					gain1ant1 = inputSolutions[a1*nDir + 0];
+					gain2ant1 = inputSolutions[a1*nDir + 1];
+					gain3ant1 = inputSolutions[a1*nDir + 2];
+					gain1ant2 = inputSolutions[a2*nDir + 0];
+					gain2ant2 = inputSolutions[a2*nDir + 1];
+					gain3ant2 = inputSolutions[a2*nDir + 2];
 					dataPtr[baselineIndex] =
 						gain1ant1 * std::conj(gain1ant2) * model1Ptr[baselineIndex] +
 						gain2ant1 * std::conj(gain2ant2) * model2Ptr[baselineIndex] +
@@ -107,7 +110,14 @@ int main(int argc, char* argv[])
 		for(size_t ant=0; ant!=nAnt; ++ant)
 		{
 			for(size_t d=0; d!=nDir; ++d)
-				std::cout << "ch" << ch << ", ant" << ant << ", d" << d << " = " << solutions[ch][d + ant*nDir] << '\n';
+			{
+				std::cout << "ch" << ch << ", ant" << ant << ", d" << d << " = " << solutions[ch][d + ant*nDir] << ", ";
+				std::complex<double> sol = solutions[ch][d + ant*nDir]/solutions[ch][d + 1*nDir];
+				std::complex<double> inp(inputSolutions[ant*nDir+d]);
+				std::cout << "inp: " << inp << ' ';
+				std::cout << "ref: " <<
+				sol << " dist: " << std::abs(sol-inp) << '\n';
+			}
 		}
 	}
 	std::cout << "Iterations: " << result.iterations << '\n';

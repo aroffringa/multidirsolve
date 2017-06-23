@@ -189,8 +189,8 @@ void MultiDirSolver::performSolveIteration(size_t channelBlockIndex,
 							
 							++modelPtrs[d]; // Goto the next polarization of this 2x2 matrix.
 						}
-						v1(dataIndex2*4+p) = dataPtr[p];
-						v2(dataIndex1*4+p) = std::conj(dataPtr[p]);
+						v1(dataIndex2*4+p) = *dataPtr;
+						v2(dataIndex1*4+p) = std::conj(*dataPtr);
 						++dataPtr; // Goto the next polarization of this 2x2 matrix.
 					}
         }

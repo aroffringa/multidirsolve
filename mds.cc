@@ -3,7 +3,8 @@
 int main(int argc, char* argv[])
 {
 	typedef std::complex<float> cf;
-	MultiDirSolver mds(1000, 1e-7, 0.5, false);
+	MultiDirSolver mds(1000, 1e-7, 0.5);
+	mds.set_phase_only(false);
 	size_t nPol = 4, nAnt = 200, nDir = 3, nChan = 10, nChanBlocks = 2, nTimes = 1, nBl=nAnt*(nAnt-1)/2;
 	
 	std::vector<int> ant1s, ant2s;

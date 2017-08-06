@@ -1,8 +1,8 @@
 
 #ifdef AOPROJECT
-#include "multidirsolver.h"
+#include "MultiDirSolver.h"
 #else
-#include <DPPP_DDECal/multidirsolver.h>
+#include <DPPP_DDECal/MultiDirSolver.h>
 #endif
 
 using namespace arma;
@@ -41,11 +41,14 @@ MultiDirSolver::SolveResult MultiDirSolver::process(std::vector<Complex *>& data
   SolveResult result;
   
   std::vector<std::vector<DComplex> > nextSolutions(_nChannelBlocks);
+
+#ifndef NDEBUG
   if (solutions.size() != _nChannelBlocks) {
     cout << "Error: 'solutions' parameter does not have the right shape" << endl;
     result.iterations = 0;
     return result;
   }
+#endif
 
   result._results.resize(_constraints.size());
   
@@ -68,7 +71,7 @@ MultiDirSolver::SolveResult MultiDirSolver::process(std::vector<Complex *>& data
     for(size_t ant=0; ant!=_nAntennas; ++ant)
     {
       // Model matrix [N x D] and visibility matrix x [N x 1]
-      // Also space for the auto correlation is reserved, but it will be set to 0.
+      // Also space for the auto correlation is reserved, but they will be set to 0.
       gTimesCs[chBlock][ant] = cx_mat(_nAntennas * nTimes * curChannelBlockSize * 4,
                                       _nDirections, fill::zeros);
       vs[chBlock][ant] = cx_vec(_nAntennas * nTimes * curChannelBlockSize * 4, fill::zeros);
@@ -224,3 +227,36 @@ void MultiDirSolver::performSolveIteration(size_t channelBlockIndex,
       nextSolutions[ant*_nDirections + d] = x(d);
   }
 }
+
+void MultiDirSolver::performFullJonesIteration() const
+{
+  // This algorithm is basically the same, but visibility values are
+  // extended to 2x2 matrices and concatenated in the matrices
+  // equations:
+  
+  // First we pre-apply the left-hand solutions to the model to make JM. Each
+  // 2x2 coherence matrix Ji is matrix-multied by the lh solutions, for all
+  // directions, and visibilities (times x channels).
+  //   JMi = Ji Mi
+  // These are stacked in matrix JM :
+  //        JM0
+  //   JM = JM1
+  //        ...
+  // such that JM is a (2DN) rows x 2 col matrix, N=nvis, D=ndir.
+  // The solved rh solution matrix is similarly formed with the rh solution
+  // values:
+  //       J0
+  //   J = J1
+  //       ...
+  // And the visibilities as well:
+  //       V0
+  //   V = V1
+  //       ...
+  // And we solve the equation:
+  //   JM J* = V
+  // Rewritten:
+  //   JM* J = V*
+  // With dimensions:
+  //   [ 2N x 2D ] [ 2D x 2 ] = [ 2N x 2 ]
+}
+

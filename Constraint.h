@@ -2,10 +2,10 @@
 #define CONSTRAINT_H
 
 #ifdef AOPROJECT
-#include "phasefitter.h"
+#include "PhaseFitter.h"
 #define UPTR std::unique_ptr
 #else
-#include <DPPP/phasefitter.h>
+#include <DPPP/PhaseFitter.h>
 #define UPTR std::auto_ptr
 #endif
 
@@ -55,13 +55,29 @@ public:
 };
 
 /**
- * Awkwardly named, this class constraints the amplitudes of the solution to be unity, but
+ * This class constraints the amplitudes of the solution to be unity, but
  * keeps the phase.
  */
-class PhaseConstraint : public Constraint
+class PhaseOnlyConstraint : public Constraint
 {
 public:
-  PhaseConstraint() {};
+  PhaseOnlyConstraint() {};
+
+  virtual void init(size_t, size_t, size_t, const double*) {};
+
+  virtual std::vector<Result> Apply(
+                    std::vector<std::vector<dcomplex> >& solutions,
+                    double time);
+};
+
+/**
+ * This class constraints the phases of the solution to be zero, but
+ * keeps the amplitude information.
+ */
+class AmplitudeOnlyConstraint : public Constraint
+{
+public:
+  AmplitudeOnlyConstraint() {};
 
   virtual void init(size_t, size_t, size_t, const double*) {};
 

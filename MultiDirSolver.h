@@ -2,11 +2,11 @@
 #define MULTI_DIR_SOLVER_H
 
 #ifdef AOPROJECT
-#include "phasefitter.h"
+#include "PhaseFitter.h"
 #include "Constraint.h"
 #define UPTR std::unique_ptr
 #else
-#include <DPPP/phasefitter.h>
+#include <DPPP/PhaseFitter.h>
 #include <DPPP_DDECal/Constraint.h>
 #define UPTR std::auto_ptr
 #endif
@@ -59,7 +59,9 @@ private:
                              std::vector<DComplex>& nextSolutions,
                              const std::vector<Complex *>& data,
                              const std::vector<std::vector<Complex *> >& modelData) const;
-  
+                             
+  void performFullJonesIteration() const;
+
   size_t _nAntennas, _nDirections, _nChannels, _nChannelBlocks;
   std::vector<int> _ant1, _ant2;
   

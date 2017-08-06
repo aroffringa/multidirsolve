@@ -1,4 +1,4 @@
-#include "multidirsolver.h"
+#include "MultiDirSolver.h"
 
 int main(int argc, char* argv[])
 {

@@ -422,8 +422,8 @@ void MultiDirSolver::performFullJonesIteration(size_t channelBlockIndex,
             Matrix2x2::HermATimesB(gTimesC1Mat.Data(), &solutions[solIndex2*4], modelMat.Data());
             for(size_t p=0; p!=4; ++p)
             {
-              gTimesC2(dataIndex1+(p/2), d+p%2) = gTimesC2Mat[p];
-              gTimesC1(dataIndex2+(p/2), d+p%2) = gTimesC1Mat[p];
+              gTimesC2(dataIndex1+(p/2), d*2+p%2) = gTimesC2Mat[p];
+              gTimesC1(dataIndex2+(p/2), d*2+p%2) = gTimesC1Mat[p];
             }
             
             modelPtrs[d] += 4; // Goto the next 2x2 matrix.
@@ -431,7 +431,7 @@ void MultiDirSolver::performFullJonesIteration(size_t channelBlockIndex,
           for(size_t p=0; p!=4; ++p)
           {
             v1(dataIndex2+(p/2), p%2) = *dataPtr;
-            v2(dataIndex1+(p/2), p%2) = std::conj(*dataPtr);
+            v2(dataIndex1+(p%2), p/2) = std::conj(*dataPtr); // note that this also performs the Herm transpose
             ++dataPtr;  // Goto the next element of 2x2 matrix.
           }
         }
@@ -450,7 +450,7 @@ void MultiDirSolver::performFullJonesIteration(size_t channelBlockIndex,
     for(size_t d=0; d!=_nDirections; ++d)
     {
       for(size_t p=0; p!=4; ++p)
-        nextSolutions[(ant*_nDirections + d)*4 + p] = x(d+p/2, p%2);
+        nextSolutions[(ant*_nDirections + d)*4 + p] = x(d*2+p/2, p%2);
     }
   }
 }

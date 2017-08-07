@@ -27,7 +27,8 @@ int main(int argc, char* argv[])
     for(size_t i=0; i!=nChanBlocks; ++i)
       nu[i] = i+1;
     
-    TECConstraint tecConstraint(TECConstraint::TECOnlyMode, nAnt, nDir, nChanBlocks, nu.data());
+    TECConstraint tecConstraint(TECConstraint::TECOnlyMode);
+    tecConstraint.initialize(nAnt, nDir, nChanBlocks, nu.data());
     
     cf gain1(0.31415926535, 0.0), gain2(2.0, 1.0), gain3(0.0, 3.0);
     std::vector<cf> inputSolutions(nAnt * nDir);
@@ -134,7 +135,7 @@ int main(int argc, char* argv[])
           vec[i * 4 + 3] = 1.0;
         }
       }
-      result = mds.processFullJones(data, modelData, solutions, 0.0);
+      result = mds.processFullMatrix(data, modelData, solutions, 0.0);
       std::cout << '\n';
       for(size_t ch=0; ch!=nChanBlocks; ++ch)
       {

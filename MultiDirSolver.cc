@@ -88,6 +88,7 @@ MultiDirSolver::SolveResult MultiDirSolver::processScalar(std::vector<Complex *>
   ///
   size_t iteration = 0;
   double normSum = 0.0, sum = 0.0;
+  bool hasConverged = false, constraintsSatisfied = false;
   do {
 #pragma omp parallel for
     for(size_t chBlock=0; chBlock<_nChannelBlocks; ++chBlock)
@@ -114,8 +115,14 @@ MultiDirSolver::SolveResult MultiDirSolver::processScalar(std::vector<Complex *>
       }
     }
     
+    constraintsSatisfied = true;
     for(size_t i=0; i!=_constraints.size(); ++i)
     {
+      // PrepareIteration() might change Satisfied(), and since we always want to
+      // iterate at least once more when a constrained is not yet satisfied, we
+      // evaluate Satisfied() before preparing.
+      constraintsSatisfied = _constraints[i]->Satisfied() && constraintsSatisfied;
+      _constraints[i]->PrepareIteration(hasConverged, iteration+1 < _maxIterations);
       result._results[i] = _constraints[i]->Apply(nextSolutions, time);
     }
     
@@ -142,7 +149,8 @@ MultiDirSolver::SolveResult MultiDirSolver::processScalar(std::vector<Complex *>
     sum /= _nChannelBlocks*_nAntennas*_nDirections;
     iteration++;
     
-  } while(iteration < _maxIterations && normSum/sum > _accuracy);
+    hasConverged = normSum/sum <= _accuracy;
+  } while(iteration < _maxIterations && (!hasConverged || !constraintsSatisfied));
   
   if(normSum/sum <= _accuracy)
     result.iterations = iteration;
@@ -224,9 +232,17 @@ void MultiDirSolver::performScalarIteration(size_t channelBlockIndex,
     cx_mat& gTimesC = gTimesCs[ant];
     cx_vec& v = vs[ant];
     // solve [g* C] x  = v
-    cx_vec x = solve(gTimesC, v);
-    for(size_t d=0; d!=_nDirections; ++d)
-      nextSolutions[ant*_nDirections + d] = x(d);
+    cx_vec x;
+    bool success = solve(x, gTimesC, v);
+    if(success)
+    {
+      for(size_t d=0; d!=_nDirections; ++d)
+        nextSolutions[ant*_nDirections + d] = x(d);
+    }
+    else {
+      for(size_t d=0; d!=_nDirections; ++d)
+        nextSolutions[ant*_nDirections + d] = std::numeric_limits<double>::quiet_NaN();
+    }
   }
 }
 
@@ -311,6 +327,7 @@ MultiDirSolver::SolveResult MultiDirSolver::processFullMatrix(std::vector<Comple
   ///
   size_t iteration = 0;
   double normSum = 0.0, sum = 0.0;
+  bool hasConverged = false, constraintsSatisfied = false;
   do {
 #pragma omp parallel for
     for(size_t chBlock=0; chBlock<_nChannelBlocks; ++chBlock)
@@ -337,8 +354,11 @@ MultiDirSolver::SolveResult MultiDirSolver::processFullMatrix(std::vector<Comple
       }
     }
     
+    constraintsSatisfied = true;
     for(size_t i=0; i!=_constraints.size(); ++i)
     {
+      constraintsSatisfied = _constraints[i]->Satisfied() && constraintsSatisfied;
+      _constraints[i]->PrepareIteration(hasConverged, iteration+1 < _maxIterations);
       result._results[i] = _constraints[i]->Apply(nextSolutions, time);
     }
     
@@ -358,7 +378,8 @@ MultiDirSolver::SolveResult MultiDirSolver::processFullMatrix(std::vector<Comple
     sum /= _nChannelBlocks*_nAntennas*_nDirections*4;
     iteration++;
     
-  } while(iteration < _maxIterations && normSum/sum > _accuracy);
+    hasConverged = normSum/sum <= _accuracy;
+  } while(iteration < _maxIterations && (!hasConverged || !constraintsSatisfied));
   
   if(normSum/sum <= _accuracy)
     result.iterations = iteration;
@@ -446,12 +467,19 @@ void MultiDirSolver::performFullMatrixIteration(size_t channelBlockIndex,
     cx_mat& gTimesC = gTimesCs[ant];
     cx_mat& v = vs[ant];
     // solve [g* C] x  = v
-    cx_mat x = solve(gTimesC, v);
-    for(size_t d=0; d!=_nDirections; ++d)
+    cx_mat x;
+    bool success = solve(x, gTimesC, v);
+    if(success)
     {
-      for(size_t p=0; p!=4; ++p)
-        nextSolutions[(ant*_nDirections + d)*4 + p] = x(d*2+p/2, p%2);
+      for(size_t d=0; d!=_nDirections; ++d)
+      {
+        for(size_t p=0; p!=4; ++p)
+          nextSolutions[(ant*_nDirections + d)*4 + p] = x(d*2+p/2, p%2);
+      }
+    }
+    else {
+      for(size_t d=0; d!=_nDirections*4; ++d)
+        nextSolutions[ant*_nDirections + d] = std::numeric_limits<double>::quiet_NaN();
     }
   }
 }
-

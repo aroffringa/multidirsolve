@@ -38,5 +38,5 @@ find_library(ARMADILLO_LIB NAMES armadillo)
 find_path(ARMADILLO_INCLUDE_DIR NAMES armadillo)
 include_directories(${ARMADILLO_INCLUDE_DIR})
 
-add_executable(mds mds.cc MultiDirSolver.cc Constraint.cc PhaseFitter.cc)
+add_executable(mds mds.cc MultiDirSolver.cc Constraint.cc PhaseFitter.cc TECConstraint.cc)
 target_link_libraries(mds ${ARMADILLO_LIB})

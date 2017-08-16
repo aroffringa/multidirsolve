@@ -1,5 +1,6 @@
 #include "MultiDirSolver.h"
 #include "Matrix2x2.h"
+#include "TECConstraint.h"
 
 int main(int argc, char* argv[])
 {

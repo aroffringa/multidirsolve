@@ -2,10 +2,14 @@
 #include "Matrix2x2.h"
 #include "TECConstraint.h"
 
+#include "stopwatch.h"
+
 int main(int argc, char* argv[])
 {
+  std::vector<Stopwatch> watches(2);
   for(size_t fullOrNot=0; fullOrNot!=2; ++fullOrNot)
   {
+    watches[fullOrNot].Start();
     typedef std::complex<float> cf;
     MultiDirSolver mds(1000, 1e-7, 0.5);
     mds.set_phase_only(false);
@@ -166,5 +170,9 @@ int main(int argc, char* argv[])
       delete[] data.back();
       data.pop_back();
     }
+    watches[fullOrNot].Pause();
   }
+  
+  for(const Stopwatch& watch : watches)
+    std::cout << watch.ToString() << '\n';
 }

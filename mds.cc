@@ -11,7 +11,11 @@ int main(int argc, char* argv[])
   {
     watches[fullOrNot].Start();
     typedef std::complex<float> cf;
-    MultiDirSolver mds(1000, 1e-7, 0.5);
+    MultiDirSolver mds;
+    mds.set_max_iterations(1000);
+    mds.set_accuracy(1e-7);
+    mds.set_step_size(0.5);
+    
     mds.set_phase_only(false);
     size_t nPol = 4, nAnt = 200, nDir = 3, nChan = 10, nChanBlocks = 2, nTimes = 1, nBl=nAnt*(nAnt-1)/2;
     

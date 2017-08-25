@@ -271,9 +271,9 @@ MultiDirSolver::SolveResult MultiDirSolver::processFullMatrix(std::vector<Comple
   std::vector<std::vector<Complex *> >& modelData,
   std::vector<std::vector<DComplex> >& solutions, double time) const
 {
-  // This algorithm is basically the same, but visibility values are
-  // extended to 2x2 matrices and concatenated in the matrices
-  // equations as block matrices.
+  // This algorithm is basically the same as the scalar algorithm,
+  // but visibility values are extended to 2x2 matrices and concatenated
+  // in the matrix equations as block matrices.
   
   // First we pre-apply the left-hand solutions to the model to make JM. Each
   // 2x2 coherence matrix Ji is matrix-multied by the lh solutions, for all
@@ -284,7 +284,7 @@ MultiDirSolver::SolveResult MultiDirSolver::processFullMatrix(std::vector<Comple
   //   JM = JM0_d1 JM1_d1 
   //        ...          
   // such that JM is a (2D) rows x (2N) col matrix, N=nvis, D=ndir.
-  // The solved rh 2D x 2 solution matrix is similarly formed with the rh solution
+  // The solved 2D x 2 solution matrix is similarly formed with the solution
   // values:
   //       J0
   //   J = J1
@@ -294,9 +294,9 @@ MultiDirSolver::SolveResult MultiDirSolver::processFullMatrix(std::vector<Comple
   //   V = V1
   //       ...
   // And we solve the equation:
-  //   'JM' J* = V
+  //   'JM' J^H = V
   // Rewritten:
-  //   'JM'* J = V*
+  //   'JM'^H J = V^H
   // With dimensions:
   //   [ 2N x 2D ] [ 2D x 2 ] = [ 2N x 2 ]
 

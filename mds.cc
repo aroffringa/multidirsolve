@@ -4,7 +4,7 @@
 
 #include "stopwatch.h"
 
-int main(int argc, char* argv[])
+void multidirtest()
 {
   std::vector<Stopwatch> watches(2);
   for(size_t fullOrNot=0; fullOrNot!=2; ++fullOrNot)
@@ -179,4 +179,140 @@ int main(int argc, char* argv[])
   
   for(const Stopwatch& watch : watches)
     std::cout << watch.ToString() << '\n';
+}
+
+void testfulljones()
+{
+  typedef std::complex<float> cf;
+  MultiDirSolver mds;
+  mds.set_max_iterations(1000);
+  mds.set_accuracy(1e-8);
+  mds.set_step_size(0.2);
+  
+  mds.set_phase_only(false);
+  size_t nPol = 4, nAnt = 100, nDir = 1, nChan = 10, nChanBlocks = 2, nTimes = 1, nBl=nAnt*(nAnt-1)/2;
+  
+  std::vector<int> ant1s, ant2s;
+  for(size_t a1=0; a1!=nAnt; ++a1)
+  {
+    for(size_t a2=a1+1; a2!=nAnt; ++a2)
+    {
+      ant1s.push_back(a1);
+      ant2s.push_back(a2);
+    }
+  }
+  
+  mds.init(nAnt, nDir, nChan, ant1s, ant2s);
+  mds.set_channel_blocks(nChanBlocks);
+  
+  std::vector<double> nu(nChanBlocks);
+  for(size_t i=0; i!=nChanBlocks; ++i)
+    nu[i] = i+1;
+  
+  std::vector<cf> inputSolutions(nAnt * nDir * nPol);
+  std::mt19937 mt;
+  std::uniform_real_distribution<float> u(1.0, 2.0);
+  for(size_t a=0; a!=nAnt; ++a)
+  {
+    for(size_t p=0; p!=nPol; ++p)
+    {
+      /*inputSolutions[a*nPol + 0] = cf(u(mt), u(mt));
+      inputSolutions[a*nPol + 1] = cf(u(mt)*0.1, u(mt)*0.1);
+      inputSolutions[a*nPol + 2] = cf(u(mt)*0.1, u(mt)*0.1);
+      inputSolutions[a*nPol + 3] = cf(u(mt), u(mt));*/
+      inputSolutions[a*nPol + 0] = cf(1.0, 0.2);
+      inputSolutions[a*nPol + 1] = cf(0.1, -0.5);
+      inputSolutions[a*nPol + 2] = cf(0.0, 0.0);
+      inputSolutions[a*nPol + 3] = cf(1.0, 0.3);
+    }
+  }
+  
+  std::vector<cf*> data;
+  std::vector<std::vector<cf*>> modelData;
+  for(size_t timestep=0; timestep!=nTimes; ++timestep)
+  {
+    cf* dataPtr = new cf[nPol * nChan * nBl];
+    cf* model1Ptr = new cf[nPol * nChan * nBl];
+    
+    for(size_t bl=0; bl!=nBl; ++bl)
+    {
+      for(size_t ch=0; ch!=nChan; ++ch)
+      {
+        model1Ptr[(bl*nChan + ch)*4 + 0] = cf(1.0, -0.2);
+        model1Ptr[(bl*nChan + ch)*4 + 1] = cf(0.0, 0.5);
+        model1Ptr[(bl*nChan + ch)*4 + 2] = cf(0.0, -0.3);
+        model1Ptr[(bl*nChan + ch)*4 + 3] = cf(1.0, 0.1);
+      }
+    }
+    
+    size_t baselineIndex = 0;
+    for(size_t a1=0; a1!=nAnt; ++a1)
+    {
+      for(size_t a2=a1+1; a2!=nAnt; ++a2)
+      {
+        for(size_t ch=0; ch!=nChan; ++ch)
+        {
+          MC2x2
+            val(&model1Ptr[(baselineIndex*nChan + ch)*4]),
+            left(&inputSolutions[a1*4 + 0]),
+            right(&inputSolutions[a2*4 + 0]);
+          MC2x2 res;
+          MC2x2::ATimesB(res, left, val);
+          MC2x2::ATimesHermB(left, res, right); // left is used as scratch
+          for(size_t p=0; p!=4; ++p)
+            dataPtr[(baselineIndex*nChan + ch)*4 + p] = left[p];
+        }
+        ++baselineIndex;
+      }
+    }
+    
+    data.push_back(dataPtr);
+    modelData.push_back(std::vector<cf*>{model1Ptr});
+  }
+  
+  MultiDirSolver::SolveResult result;
+  std::vector<std::vector<std::complex<double> > > solutions(nChanBlocks);
+  
+  for(auto& vec : solutions)
+  {
+    vec.assign(nDir * nAnt * 4, 0.0);
+    for(size_t i=0; i!=nDir*nAnt; ++i)
+    {
+      vec[i * 4 + 0] = 1.0;
+      vec[i * 4 + 3] = 1.0;
+    }
+  }
+  result = mds.processFullMatrix(data, modelData, solutions, 0.0);
+  std::cout << '\n';
+  for(size_t ch=0; ch!=nChanBlocks; ++ch)
+  {
+    for(size_t ant=0; ant!=nAnt; ++ant)
+    {
+      for(size_t d=0; d!=nDir; ++d)
+      {
+        MC2x2 solM(&solutions[ch][(d + ant*nDir) * 4]);
+        MC2x2 inpM(&inputSolutions[(d + ant*nDir) * 4]);
+        MC2x2 solSq, inpSq;
+        MC2x2::ATimesHermB(solSq, solM, solM);
+        MC2x2::ATimesHermB(inpSq, inpM, inpM);
+        std::cout << "ch" << ch << ", ant" << ant << ", = " << solSq.ToString() << ", ";
+        std::cout << "inp: " << inpSq.ToString() << '\n';
+      }
+    }
+  }
+  std::cout << "Iterations: " << result.iterations << '\n';
+  
+  while(!data.empty())
+  {
+    delete[] modelData.back()[0];
+    modelData.pop_back();
+    delete[] data.back();
+    data.pop_back();
+  }
+}
+
+int main(int argc, char* argv[])
+{
+  //multidirtest();
+  testfulljones();
 }

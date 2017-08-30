@@ -216,14 +216,23 @@ void testfulljones()
   {
     for(size_t p=0; p!=nPol; ++p)
     {
-      /*inputSolutions[a*nPol + 0] = cf(u(mt), u(mt));
+      inputSolutions[a*nPol + 0] = cf(u(mt), u(mt));
       inputSolutions[a*nPol + 1] = cf(u(mt)*0.1, u(mt)*0.1);
       inputSolutions[a*nPol + 2] = cf(u(mt)*0.1, u(mt)*0.1);
-      inputSolutions[a*nPol + 3] = cf(u(mt), u(mt));*/
-      inputSolutions[a*nPol + 0] = cf(0.0, 0.0);
-      inputSolutions[a*nPol + 1] = cf(0.0, 0.0);
-      inputSolutions[a*nPol + 2] = cf(0.0, 1.0);
-      inputSolutions[a*nPol + 3] = cf(0.0, 0.0);
+      inputSolutions[a*nPol + 3] = cf(u(mt), u(mt));
+     /* if(a == 10)
+      {
+        inputSolutions[a*nPol + 0] = cf(1.0, 0.0);
+        inputSolutions[a*nPol + 1] = cf(0.0, -0.5);
+        inputSolutions[a*nPol + 2] = cf(0.0, 0.7);
+        inputSolutions[a*nPol + 3] = cf(1.0, 0.0);
+      }
+      else {
+        inputSolutions[a*nPol + 0] = cf(1.0, 0.0);
+        inputSolutions[a*nPol + 1] = cf(0.0, 0.0);
+        inputSolutions[a*nPol + 2] = cf(0.0, 0.0);
+        inputSolutions[a*nPol + 3] = cf(1.0, 0.0);
+      }*/
     }
   }
   
@@ -238,10 +247,14 @@ void testfulljones()
     {
       for(size_t ch=0; ch!=nChan; ++ch)
       {
-        model1Ptr[(bl*nChan + ch)*4 + 0] = cf(1.0, -0.2);
-        model1Ptr[(bl*nChan + ch)*4 + 1] = cf(0.0, 0.0); //cf(0.0, 0.5);
-        model1Ptr[(bl*nChan + ch)*4 + 2] = cf(0.0, 0.0); //cf(0.0, -0.3);
-        model1Ptr[(bl*nChan + ch)*4 + 3] = cf(2.0, 0.0); //cf(1.0, 0.1);
+        /*model1Ptr[(bl*nChan + ch)*4 + 0] = cf(4.0, -0.2);
+        model1Ptr[(bl*nChan + ch)*4 + 1] = cf(0.1, -0.1); //cf(0.0, 0.5);
+        model1Ptr[(bl*nChan + ch)*4 + 2] = cf(0.1, 0.3); //cf(0.0, -0.3);
+        model1Ptr[(bl*nChan + ch)*4 + 3] = cf(1.0, 0.2); //cf(1.0, 0.1);*/
+        model1Ptr[(bl*nChan + ch)*4 + 0] = cf(u(mt), u(mt));
+        model1Ptr[(bl*nChan + ch)*4 + 1] = cf(u(mt)*0.1, u(mt)*0.1);
+        model1Ptr[(bl*nChan + ch)*4 + 2] = cf(u(mt)*0.1, u(mt)*0.1);
+        model1Ptr[(bl*nChan + ch)*4 + 3] = cf(1.5*u(mt), 1.5*u(mt));
       }
     }
     
@@ -273,6 +286,7 @@ void testfulljones()
   MultiDirSolver::SolveResult result;
   std::vector<std::vector<std::complex<double> > > solutions(nChanBlocks);
   
+  // Initialize unit-matrices as initial values
   for(auto& vec : solutions)
   {
     vec.assign(nDir * nAnt * 4, 0.0);
@@ -313,6 +327,6 @@ void testfulljones()
 
 int main(int argc, char* argv[])
 {
-  //multidirtest();
+  multidirtest();
   testfulljones();
 }

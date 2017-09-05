@@ -58,6 +58,24 @@ void MultiDirSolver::makeStep(const std::vector<std::vector<DComplex> >& solutio
   }
 }
 
+void MultiDirSolver::makeSolutionsFinite(std::vector<std::vector<DComplex> >& solutions, size_t perPol) const
+{
+  for(std::vector<DComplex>& solVector : solutions)
+  {
+    size_t n = solVector.size() / perPol;
+    std::vector<DComplex>::iterator iter = solVector.begin();
+    for(size_t i=0; i!=n; ++i)
+    {
+      for(size_t p=0; p!=perPol; ++p)
+      {
+        if(!std::isfinite(iter->real()) || !std::isfinite(iter->imag()))
+          *iter = DComplex(1.0, 0.0);
+        ++iter;
+      }
+    }
+  }
+}
+
 bool MultiDirSolver::assignSolutions(std::vector<std::vector<DComplex> >& solutions,
   std::vector<std::vector<DComplex> >& nextSolutions, bool useConstraintAccuracy) const
 {
@@ -114,7 +132,6 @@ MultiDirSolver::SolveResult MultiDirSolver::processScalar(std::vector<Complex *>
   std::vector<std::vector<cx_vec> > vs(_nChannelBlocks);
   for(size_t chBlock=0; chBlock!=_nChannelBlocks; ++chBlock)
   {
-    //solutions[chBlock].assign(_nDirections * _nAntennas, 1.0);
     nextSolutions[chBlock].resize(_nDirections * _nAntennas);
     const size_t
       channelIndexStart = chBlock * _nChannels / _nChannelBlocks,
@@ -145,6 +162,8 @@ MultiDirSolver::SolveResult MultiDirSolver::processScalar(std::vector<Complex *>
     hasPreviouslyConverged = false,
     constraintsSatisfied = false;
   do {
+    makeSolutionsFinite(solutions, 1);
+    
 #pragma omp parallel for
     for(size_t chBlock=0; chBlock<_nChannelBlocks; ++chBlock)
     {
@@ -159,7 +178,7 @@ MultiDirSolver::SolveResult MultiDirSolver::processScalar(std::vector<Complex *>
     for(size_t i=0; i!=_constraints.size(); ++i)
     {
       // PrepareIteration() might change Satisfied(), and since we always want to
-      // iterate at least once more when a constrained is not yet satisfied, we
+      // iterate at least once more when a constraint is not yet satisfied, we
       // evaluate Satisfied() before preparing.
       constraintsSatisfied = _constraints[i]->Satisfied() && constraintsSatisfied;
       _constraints[i]->PrepareIteration(hasPreviouslyConverged, iteration, iteration+1 >= _maxIterations);
@@ -358,6 +377,8 @@ MultiDirSolver::SolveResult MultiDirSolver::processFullMatrix(std::vector<Comple
   size_t iteration = 0, constrainedIterations = 0;
   bool hasConverged = false, hasPreviouslyConverged = false, constraintsSatisfied = false;
   do {
+    makeSolutionsFinite(solutions, 4);
+    
 #pragma omp parallel for
     for(size_t chBlock=0; chBlock<_nChannelBlocks; ++chBlock)
     {

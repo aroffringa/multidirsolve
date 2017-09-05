@@ -87,6 +87,8 @@ private:
   void makeStep(const std::vector<std::vector<DComplex> >& solutions,
     std::vector<std::vector<DComplex> >& nextSolutions) const;
                 
+  void makeSolutionsFinite(std::vector<std::vector<DComplex> >& solutions, size_t perPol) const;
+                
   /**
    * Assign the solutions in nextSolutions to the solutions.
    * @returns whether the solutions have been converged.

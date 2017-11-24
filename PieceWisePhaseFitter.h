@@ -185,8 +185,6 @@ public:
     return values[index].first;
   }
   
-  void SetUseOldFittingStrategy(bool useOldStrategy) { _useOldStrategy = useOldStrategy; }
-  
 private:
   size_t _chunkSize;
   /**
@@ -194,19 +192,11 @@ private:
    */
   std::vector<double> _tempArray;
   std::vector<std::pair<double,double>> _tempWeightedArray;
-  bool _useOldStrategy = false;
   
-  void fitSlope(const double* data, const double* frequencies, size_t n, double& a, double& b)
-  {
-    if(_useOldStrategy)
-      fitSlope2(data, frequencies, n, a, b);
-    else
-      fitSlope1(data, frequencies, n, a, b);
-  }
   /**
   * Fit a + bx
   */
-  void fitSlope1(const double* data, const double* frequencies, size_t n, double& a, double& b)
+  void fitSlope(const double* data, const double* frequencies, size_t n, double& a, double& b)
   {
     double
       sum_x = 0.0,
@@ -263,49 +253,6 @@ private:
     a = mean_y - b * mean_x;
   }
   
-  /**
-  * Fit a + bx
-  */
-  void fitSlope2(const double* data, const double* frequencies, size_t n, double& a, double& b)
-  {
-    double
-      sum_x = 0.0,
-      sum_xSq = 0.0,
-      mean_y = 0.0,
-      ss_xy = 0.0;
-    std::vector<double>& d = _tempArray;
-    d.assign(data, data+n);
-    std::nth_element(d.data()+n/4, d.data()+n/2, d.data()+n*3/4);
-    double wrapTo = d[n/2];
-    for(double& v : d)
-    {
-      if(v - wrapTo > M_PI)
-        v -= 2.0*M_PI;
-      else if(v - wrapTo < -M_PI)
-        v += 2.0*M_PI;
-    }
-    std::nth_element(d.data(), d.data()+n/2, d.data()+n);
-    wrapTo = d[n/2];
-    for(size_t i=0; i!=n; ++i)
-    {
-      double x = data[i];
-      if(x - wrapTo > M_PI)
-        x -= 2.0*M_PI;
-      else if(x - wrapTo < -M_PI)
-        x += 2.0*M_PI;
-      sum_x += frequencies[i];
-      sum_xSq += frequencies[i] * frequencies[i];
-      mean_y += x;
-      ss_xy += frequencies[i] * x;
-    }
-    mean_y /= n;
-    double mean_x = sum_x / n;
-    double ss_xx = sum_xSq - mean_x * sum_x;
-    ss_xy -= sum_x * mean_y;
-    b = ss_xy / ss_xx;
-    a = mean_y - b * mean_x;
-  }
-  
   template<typename Iter1, typename Iter2>
   double weightedMedian(Iter1 valBegin, Iter1 valEnd, Iter2 weightBegin)
   {
@@ -321,17 +268,10 @@ private:
     return WeightedMedian(_tempWeightedArray);
   }
   
-  void fitSlope(const double* data, const double* frequencies, const double* weights, size_t n, double& a, double& b)
-  {
-    if(_useOldStrategy)
-      fitSlope2(data, frequencies, weights, n, a, b);
-    else
-      fitSlope1(data, frequencies, weights, n, a, b);
-  }
   /**
   * Fit a + bx with weights
   */
-  void fitSlope1(const double* data, const double* frequencies, const double* weights, size_t n, double& a, double& b)
+  void fitSlope(const double* data, const double* frequencies, const double* weights, size_t n, double& a, double& b)
   {
     size_t qCounts[4] = {0,0,0,0};
     for(size_t i=0; i!=n; ++i)
@@ -364,8 +304,6 @@ private:
       d[i] = v;
     }
     wrapTo = weightedMedian(d.data()+n/4, d.data()+n*3/4, weights+n/4);
-    //std::nth_element(d.data()+n/4, d.data()+n/2, d.data()+n*3/4);
-    //wrapTo = d[n/2];
     
     double
       sum_x = 0.0,
@@ -394,59 +332,7 @@ private:
     b = ss_xy / ss_xx;
     a = mean_y - b * mean_x;
   }
-  
-  /**
-  * Fit a + bx with weights
-  */
-  void fitSlope2(const double* data, const double* frequencies, const double* weights, size_t n, double& a, double& b)
-  {
-    std::vector<double>& d = _tempArray;
-    d.clear();
-    for(size_t i=0; i!=n; ++i)
-    {
-      if(weights[i] > 0.0)
-        d.push_back(data[i]);
-    }
-    std::nth_element(d.data(), d.data()+n/2, d.data()+n);
-    double wrapTo = d[n/2];
-    for(double& v : d)
-    {
-      if(v - wrapTo > M_PI)
-        v -= 2.0*M_PI;
-      else if(v - wrapTo < -M_PI)
-        v += 2.0*M_PI;
-    }
-    std::nth_element(d.data(), d.data()+n/2, d.data()+n);
-    wrapTo = d[n/2];
     
-    double
-      sum_x = 0.0,
-      sum_xSq = 0.0,
-      mean_y = 0.0,
-      ss_xy = 0.0,
-      sum_weight = 0.0;
-      
-    for(size_t i=0; i!=n; ++i)
-    {
-      double x = data[i];
-      if(x - wrapTo > M_PI)
-        x -= 2.0*M_PI;
-      else if(x - wrapTo < -M_PI)
-        x += 2.0*M_PI;
-      sum_x += frequencies[i] * weights[i];
-      sum_xSq += frequencies[i] * frequencies[i] * weights[i];
-      mean_y += x * weights[i];
-      ss_xy += frequencies[i] * x * weights[i];
-      sum_weight += weights[i];
-    }
-    mean_y /= sum_weight;
-    double mean_x = sum_x / sum_weight;
-    double ss_xx = sum_xSq - mean_x * sum_x;
-    ss_xy -= sum_x * mean_y;
-    b = ss_xy / ss_xx;
-    a = mean_y - b * mean_x;
-  }
-  
   void fitChunk(size_t chunkSize, size_t pos, const std::vector<double>& nu, const std::vector<double>& data, std::vector<double>& fittedData)
   {
     double a, b;

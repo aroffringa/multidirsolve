@@ -4,7 +4,6 @@
 #include <algorithm>
 #include <iterator>
 #include <cmath>
-#include <numeric>
 
 class PieceWisePhaseFitter
 {
@@ -93,31 +92,31 @@ public:
   * Performs a sliding fit of linear phase gradients (without weighting).
   * See other SlidingFit() overload.
   */
-  void SlidingFit(const double* nu, const std::vector<double>& data, std::vector<double>& fittedData)
+  void SlidingFit(const double* nu, const double* data, double* fittedData, size_t n)
   {
     const size_t
-      chunkSize = std::min(_chunkSize, data.size());
+      chunkSize = std::min(_chunkSize, n);
     if(chunkSize==1)
-      fittedData = data;
+      std::copy(data, data+n, fittedData);
     else
     {
       const size_t
         leftEdge = chunkSize/2,
-        rightEdge = data.size() - chunkSize + chunkSize/2;
+        rightEdge = n - chunkSize + chunkSize/2;
       
       double a, b;
       PieceWisePhaseFitter::fitSlope(&data[0], &nu[0], chunkSize, a, b);
       for(size_t ch=0; ch!=leftEdge; ++ch)
         fittedData[ch] = a + b * nu[ch];
       
-      for(size_t ch=0; ch!=data.size() - chunkSize; ++ch)
+      for(size_t ch=0; ch!=n - chunkSize; ++ch)
       {
         PieceWisePhaseFitter::fitSlope(&data[ch], &nu[ch], chunkSize, a, b);
         fittedData[ch + chunkSize/2] = a + b * nu[ch + chunkSize/2];
       }
       
-      PieceWisePhaseFitter::fitSlope(&data[data.size() - chunkSize], &nu[data.size() - chunkSize], chunkSize, a, b);
-      for(size_t ch=rightEdge; ch!=data.size(); ++ch)
+      PieceWisePhaseFitter::fitSlope(&data[n - chunkSize], &nu[n - chunkSize], chunkSize, a, b);
+      for(size_t ch=rightEdge; ch!=n; ++ch)
         fittedData[ch] = a + b * nu[ch];
     }
   }
@@ -131,41 +130,60 @@ public:
   * The fit is not necessarily entirely smooth, because the line fit tries to guess the right wrapping of the samples.
   * Since that is not a linear process, this can still cause slight jumps.
   * 
-  * @param chunkSize Size of chunk in number of samples.
   * @param nu Frequencies of the channels (in Hz).
   * @param data The values, same size as @c nu.
   * @param weights Inverse-variance weights.
   * @param fittedData A vector of at least size @c nu.size(), in which the fitted lines are stored.
   */
-  void SlidingFit(const double* nu, const std::vector<double>& data, const double* weights, std::vector<double>& fittedData)
+  void SlidingFit(const double* nu, const double* data, const double* weights, double* fittedData, size_t n)
   {
     const size_t
-      chunkSize = std::min(_chunkSize, data.size());
+      chunkSize = std::min(_chunkSize, n);
     if(chunkSize==1)
-      fittedData = data;
+      std::copy(data, data+n, fittedData);
     else
     {
     const size_t
       leftEdge = chunkSize/2,
-      rightEdge = data.size() - chunkSize + chunkSize/2;
+      rightEdge = n - chunkSize + chunkSize/2;
     
       double a, b;
       PieceWisePhaseFitter::fitSlope(&data[0], &nu[0], &weights[0], chunkSize, a, b);
       for(size_t ch=0; ch!=leftEdge; ++ch)
         fittedData[ch] = a + b * nu[ch];
       
-      for(size_t ch=0; ch!=data.size() - chunkSize; ++ch)
+      for(size_t ch=0; ch!=n - chunkSize; ++ch)
       {
         PieceWisePhaseFitter::fitSlope(&data[ch], &nu[ch], &weights[ch], chunkSize, a, b);
         fittedData[ch + chunkSize/2] = a + b * nu[ch + chunkSize/2];
       }
       
-      PieceWisePhaseFitter::fitSlope(&data[data.size() - chunkSize], &nu[data.size() - chunkSize], &weights[data.size() - chunkSize], chunkSize, a, b);
-      for(size_t ch=rightEdge; ch!=data.size(); ++ch)
+      PieceWisePhaseFitter::fitSlope(&data[n - chunkSize], &nu[n - chunkSize], &weights[n - chunkSize], chunkSize, a, b);
+      for(size_t ch=rightEdge; ch!=n; ++ch)
         fittedData[ch] = a + b * nu[ch];
     }
   }
   
+  size_t SlidingFitWithBreak(const double* nu, const double* data, const double* weights, double* fittedData, size_t n)
+  {
+    SlidingFit(nu, data, weights, fittedData, n);
+    size_t bp = BreakPoint(data, weights, fittedData, n);
+    SlidingFit(nu, data, weights, fittedData, bp);
+    SlidingFit(nu+bp, data+bp, weights+bp, fittedData+bp, n-bp);
+    return bp;
+  }
+  
+  /**
+   * Calculates a weighted median. The weighted median is defined as the
+   * sample x for which the sum of all values smaller than x is less than half of the
+   * total weight, and idem for all values larger than x.
+   * For example, given the sequence
+   * 1,2,3,4,5 with weights 1,100,1,1,1; the weighted median is '2'.
+   * (sum of weight=104, values < 2 a have weight of 1, values > 2 have a weight of 3).
+   * This function is internally used by the piece-wise phase fitter.
+   * @param values A vector of (value, weight) pairs.
+   * @returns The weighted median.
+   */
   static double WeightedMedian(std::vector<std::pair<double, double>>& values)
   {
     std::sort(values.begin(), values.end());
@@ -183,6 +201,27 @@ public:
       prefixSum -= values[index].second;
     }
     return values[index].first;
+  }
+  
+  size_t BreakPoint(const double* data, const double* weights, const double* fittedData, size_t n)
+  {
+    double largest = 0.0;
+    size_t index = 0;
+    for(size_t i=0; i!=n-_chunkSize; ++i)
+    {
+      double curSum = 0.0;
+      for(size_t j=0; j!=_chunkSize; ++j)
+      {
+        double dist = data[i+j] - fittedData[i+j];
+        curSum += fabs(dist) * weights[i+j];
+      }
+      if(curSum > largest)
+      {
+        largest = curSum;
+        index = i + _chunkSize/2;
+      }
+    }
+    return index;
   }
   
 private:
@@ -325,12 +364,19 @@ private:
       ss_xy += frequencies[i] * x * weights[i];
       sum_weight += weights[i];
     }
-    mean_y /= sum_weight;
-    double mean_x = sum_x / sum_weight;
-    double ss_xx = sum_xSq - mean_x * sum_x;
-    ss_xy -= sum_x * mean_y;
-    b = ss_xy / ss_xx;
-    a = mean_y - b * mean_x;
+    if(sum_weight == 0.0)
+    {
+      a = 0.0;
+      b = 0.0;
+    }
+    else {
+      mean_y /= sum_weight;
+      double mean_x = sum_x / sum_weight;
+      double ss_xx = sum_xSq - mean_x * sum_x;
+      ss_xy -= sum_x * mean_y;
+      b = ss_xy / ss_xx;
+      a = mean_y - b * mean_x;
+    }
   }
     
   void fitChunk(size_t chunkSize, size_t pos, const std::vector<double>& nu, const std::vector<double>& data, std::vector<double>& fittedData)

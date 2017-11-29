@@ -186,7 +186,7 @@ std::vector<Constraint::Result> ApproximateTECConstraint::Apply(
         }
       }
       
-      _pwFitters[thread].SlidingFit(_phaseFitters[thread].FrequencyData(), data, weights.data(), fittedData);
+      _pwFitters[thread].SlidingFit(_phaseFitters[thread].FrequencyData(), data.data(), weights.data(), fittedData.data(), data.size());
 
       for(size_t ch=0; ch!=_nChannelBlocks; ++ch) 
       {

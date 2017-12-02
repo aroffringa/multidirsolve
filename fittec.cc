@@ -145,9 +145,9 @@ int main(int argc, char* argv[])
         solutions[i] = std::arg(newVal);
       }
       else {
-        double in = fmod(fmod(input[i] + 2.0*M_PI, 2.0*M_PI) + 2.0*M_PI, 2.0*M_PI);
-        double s = fmod(fmod(solutions[i] + 2.0*M_PI, 2.0*M_PI) + 2.0*M_PI, 2.0*M_PI);
-        double distance = in - s;
+        double moveTo = fmod(fmod(input[i] + 2.0*M_PI, 2.0*M_PI) + 2.0*M_PI, 2.0*M_PI);
+        double moveFrom = fmod(fmod(solutions[i] + 2.0*M_PI, 2.0*M_PI) + 2.0*M_PI, 2.0*M_PI);
+        double distance = moveTo - moveFrom;
         if(distance > M_PI) distance = distance - 2.0*M_PI;
         else if(distance < -M_PI) distance = distance + 2.0*M_PI;
         solutions[i] = solutions[i] + stepSize * distance;

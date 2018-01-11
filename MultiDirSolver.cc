@@ -2,6 +2,7 @@
 #ifdef AOPROJECT
 #include "MultiDirSolver.h"
 #include "Matrix2x2.h"
+#include "parallel_for.h"
 #else
 #include <DPPP_DDECal/MultiDirSolver.h>
 #include <DPPP_DDECal/Matrix2x2.h>
@@ -41,9 +42,7 @@ void MultiDirSolver::makeStep(const std::vector<std::vector<DComplex> >& solutio
 {
   // Move the solutions towards nextSolutions
   // (the moved solutions are stored in 'nextSolutions')
-#pragma omp parallel for
-  for(size_t chBlock=0; chBlock<_nChannelBlocks; ++chBlock)
-  {
+  ao::parallel_for<size_t>(0, _nChannelBlocks, [&](size_t chBlock) {
     for(size_t i=0; i!=nextSolutions[chBlock].size(); ++i)
     {
       if(_phaseOnly)
@@ -61,7 +60,7 @@ void MultiDirSolver::makeStep(const std::vector<std::vector<DComplex> >& solutio
           nextSolutions[chBlock][i] * _stepSize;
       }
     }
-  }
+  });
 }
 
 void MultiDirSolver::makeSolutionsFinite(std::vector<std::vector<DComplex> >& solutions, size_t perPol) const
@@ -88,7 +87,6 @@ bool MultiDirSolver::assignSolutions(std::vector<std::vector<DComplex> >& soluti
   double normSum = 0.0, sum = 0.0;
   //  Calculate the norm of the difference between the old and new solutions
   size_t n = 0;
-#pragma omp parallel for
   for(size_t chBlock=0; chBlock<_nChannelBlocks; ++chBlock)
   {
     n += solutions[chBlock].size();
@@ -170,13 +168,11 @@ MultiDirSolver::SolveResult MultiDirSolver::processScalar(std::vector<Complex *>
   do {
     makeSolutionsFinite(solutions, 1);
     
-#pragma omp parallel for
-    for(size_t chBlock=0; chBlock<_nChannelBlocks; ++chBlock)
-    {
+  ao::parallel_for<size_t>(0, _nChannelBlocks, [&](size_t chBlock) {
       performScalarIteration(chBlock, gTimesCs[chBlock], vs[chBlock],
                             solutions[chBlock], nextSolutions[chBlock],
                             data, modelData);
-    }
+    });
       
     makeStep(solutions, nextSolutions);
     
@@ -277,9 +273,7 @@ void MultiDirSolver::performScalarIteration(size_t channelBlockIndex,
   
   // The matrices have been filled; compute the linear solution
   // for each antenna.
-#pragma omp parallel for
-  for(size_t ant=0; ant<_nAntennas; ++ant)
-  {
+  ao::parallel_for<size_t>(0, _nAntennas, [&](size_t ant) {
     cx_mat& gTimesC = gTimesCs[ant];
     cx_vec& v = vs[ant];
     // solve [g* C] x  = v
@@ -294,7 +288,7 @@ void MultiDirSolver::performScalarIteration(size_t channelBlockIndex,
       for(size_t d=0; d!=_nDirections; ++d)
         nextSolutions[ant*_nDirections + d] = std::numeric_limits<double>::quiet_NaN();
     }
-  }
+  });
 }
 
 MultiDirSolver::SolveResult MultiDirSolver::processFullMatrix(std::vector<Complex *>& data,
@@ -385,13 +379,11 @@ MultiDirSolver::SolveResult MultiDirSolver::processFullMatrix(std::vector<Comple
   do {
     makeSolutionsFinite(solutions, 4);
     
-#pragma omp parallel for
-    for(size_t chBlock=0; chBlock<_nChannelBlocks; ++chBlock)
-    {
+    ao::parallel_for<size_t>(0, _nChannelBlocks, [&](size_t chBlock) {
       performFullMatrixIteration(chBlock, gTimesCs[chBlock], vs[chBlock],
                                 solutions[chBlock], nextSolutions[chBlock],
                                 data, modelData);
-    }
+    });
       
     makeStep(solutions, nextSolutions);
     
@@ -505,9 +497,7 @@ void MultiDirSolver::performFullMatrixIteration(size_t channelBlockIndex,
   
   // The matrices have been filled; compute the linear solution
   // for each antenna.
-#pragma omp parallel for
-  for(size_t ant=0; ant<_nAntennas; ++ant)
-  {
+  ao::parallel_for<size_t>(0, _nAntennas, [&](size_t ant) {
     cx_mat& gTimesC = gTimesCs[ant];
     cx_mat& v = vs[ant];
     // solve x^H in [g C] x^H  = v
@@ -527,5 +517,5 @@ void MultiDirSolver::performFullMatrixIteration(size_t channelBlockIndex,
       for(size_t i=0; i!=_nDirections*4; ++i)
         nextSolutions[ant*_nDirections + i] = std::numeric_limits<double>::quiet_NaN();
     }
-  }
+  });
 }

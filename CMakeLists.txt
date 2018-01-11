@@ -4,14 +4,14 @@ project(mds)
 
 add_definitions(-DAOPROJECT)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -ggdb -Wall -DNDEBUG -march=native -std=c++17")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -ggdb -Wall -march=native -std=c++11")
 
-if(NOT DISABLE_OMP)
-  FIND_PACKAGE( OpenMP REQUIRED)
-  if(OPENMP_FOUND)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
-  endif(OPENMP_FOUND)
-endif(NOT DISABLE_OMP)
+#if(NOT DISABLE_OMP)
+#  FIND_PACKAGE( OpenMP REQUIRED)
+#  if(OPENMP_FOUND)
+#    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+#  endif(OPENMP_FOUND)
+#endif(NOT DISABLE_OMP)
 
 # Casacore has a separate CMake file in this directory
 set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/CMake)
@@ -36,12 +36,13 @@ IF("${isSystemDir}" STREQUAL "-1")
    SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
 ENDIF("${isSystemDir}" STREQUAL "-1")
 
+find_package(Threads REQUIRED)
 find_library(ARMADILLO_LIB NAMES armadillo)
 find_path(ARMADILLO_INCLUDE_DIR NAMES armadillo)
 include_directories(${ARMADILLO_INCLUDE_DIR})
 
 add_executable(mds mds.cc MultiDirSolver.cc Constraint.cc PhaseFitter.cc TECConstraint.cc stopwatch.cpp)
-target_link_libraries(mds ${ARMADILLO_LIB})
+target_link_libraries(mds ${ARMADILLO_LIB} ${CMAKE_THREAD_LIBS_INIT})
 
 add_executable(fittec fittec.cc PhaseFitter.cc)
 

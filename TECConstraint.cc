@@ -1,6 +1,7 @@
 #ifdef AOPROJECT
 #include "TECConstraint.h"
 #include "omptools.h"
+#include "parallel_for.h"
 #else
 #include <DPPP_DDECal/TECConstraint.h>
 #include <Common/OpenMP.h>
@@ -111,16 +112,9 @@ std::vector<Constraint::Result> TECConstraint::Apply(
   // Divide out the reference antenna
   applyReferenceAntenna(solutions);
   
-#pragma omp parallel for
-  for(size_t solutionIndex = 0; solutionIndex<_nAntennas*_nDirections; ++solutionIndex)
-  {
-    size_t thread =
-#ifdef AOPROJECT
-        omp_get_thread_num();
-#else
-        LOFAR::OpenMP::threadNum();
-#endif
-
+  size_t nCPUs = ao::parallel_for<size_t>::NCPUs();
+  ao::parallel_for<size_t>(0, _nAntennas*_nDirections, nCPUs, [&](size_t solutionIndex, size_t thread) {
+    
     for(size_t ch=0; ch!=_nChannelBlocks; ++ch) {
       if(std::isfinite(solutions[ch][solutionIndex].real()) &&
         std::isfinite(solutions[ch][solutionIndex].imag()))
@@ -148,7 +142,7 @@ std::vector<Constraint::Result> TECConstraint::Apply(
     {
       solutions[ch][solutionIndex] = std::polar<double>(1.0, _phaseFitters[thread].PhaseData()[ch]);
     }
-  }
+  });
 
   return res;
 }
@@ -161,14 +155,8 @@ std::vector<Constraint::Result> ApproximateTECConstraint::Apply(
   else {
     applyReferenceAntenna(solutions);
     
-#pragma omp parallel for
-    for(size_t solutionIndex = 0; solutionIndex<_nAntennas*_nDirections; ++solutionIndex)
-    {
-#ifdef AOPROJECT
-      size_t thread = omp_get_thread_num();
-#else
-      size_t thread = LOFAR::OpenMP::threadNum();
-#endif
+    size_t nCPUs = ao::parallel_for<size_t>::NCPUs();
+    ao::parallel_for<size_t>(0, _nAntennas*_nDirections, nCPUs, [&](size_t solutionIndex, size_t thread) {
       std::vector<double>& data = _threadData[thread];
       std::vector<double>& fittedData = _threadFittedData[thread];
       std::vector<double>& weights = _threadWeights[thread];
@@ -193,7 +181,7 @@ std::vector<Constraint::Result> ApproximateTECConstraint::Apply(
       {
         solutions[ch][solutionIndex] = std::polar<double>(1.0, fittedData[ch]);
       }
-    }
+    });
 
     return std::vector<Constraint::Result>();
   }

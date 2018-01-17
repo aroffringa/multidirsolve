@@ -1,6 +1,7 @@
 #include "MultiDirSolver.h"
 #include "Matrix2x2.h"
 #include "TECConstraint.h"
+#include "qrsolver.h"
 
 #include "stopwatch.h"
 
@@ -325,8 +326,33 @@ void testfulljones()
   }
 }
 
+void testQRSolver()
+{
+  size_t m = 3, n = 4, nrhs = 2;
+  QRSolver solver(m, n, nrhs);
+  std::complex<double> a[] = { // m x n
+    { -4.20, -3.44}, { -5.43, -8.81}, { -5.56,  3.39}, 
+    { -3.35,  1.52}, { -4.53, -8.47}, {  2.90, -9.22}, 
+    {  1.73,  8.85}, {  5.93,  3.75}, {  8.03,  9.37}, 
+    {  2.35,  0.34}, { -3.75, -5.66}, {  5.69, -0.47}
+  };
+  std::complex<double> b[] = { // m x nrhs
+    {-7.02,  4.80}, { 0.62, -2.40}, { 3.10, -2.19}, { 0.00,  0.00},
+    { 3.88, -2.59}, { 1.57,  3.24}, {-6.93, -5.99}, { 0.00,  0.00}
+  };
+  std::cout << "Solve(a, b) = " << (solver.Solve(a, b)?"true":"false") << '\n';
+  std::cout << "X = \n"; // n x nrhs
+  for(size_t i=0; i!=n; ++i) {
+    for(size_t j=0; j!=nrhs; ++j) {
+      std::cout << b[i + j*n] << ' ';
+    }
+    std::cout << '\n';
+  }
+}
+
 int main(int argc, char* argv[])
 {
-  multidirtest();
+  //testQRSolver();
+  //multidirtest();
   testfulljones();
 }

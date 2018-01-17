@@ -22,6 +22,26 @@ class MultiDirSolver
 public:
   typedef std::complex<double> DComplex;
   typedef std::complex<float> Complex;
+  class Matrix : public std::vector<DComplex>
+  {
+  public:
+    Matrix() : _m(0) { }
+    Matrix(size_t m, size_t n) : std::vector<DComplex>(n * m, 0.0), _m(m)
+    { }
+    void zeros()
+    {
+      assign(size(), DComplex(0.0, 0.0));
+    }
+    DComplex& operator()(size_t i, size_t j)
+    {
+      return (*this)[i + j*_m];
+    }
+    void reshape(size_t m, size_t n) { _m = m; }
+    
+  private:
+    size_t _m;
+  };
+
   
   struct SolveResult {
     size_t iterations, constraintIterations;
@@ -77,8 +97,8 @@ private:
                              const std::vector<std::vector<Complex *> >& modelData) const;
                              
   void performFullMatrixIteration(size_t channelBlockIndex,
-                             std::vector<arma::cx_mat>& gTimesCs,
-                             std::vector<arma::cx_mat>& vs,
+                             std::vector<Matrix>& gTimesCs,
+                             std::vector<Matrix>& vs,
                              const std::vector<DComplex>& solutions,
                              std::vector<DComplex>& nextSolutions,
                              const std::vector<Complex *>& data,

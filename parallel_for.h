@@ -39,13 +39,11 @@ namespace ao {
  		parallel_for(Iter start, Iter end, size_t nThreads, Function function) :
 			_current(start), _end(end)
 		{
-			if(nThreads > 0)
-				--nThreads;
 			std::vector<std::thread> threads;
       threads.reserve(nThreads);
-      for(unsigned t=0; t!=nThreads; ++t)
+      for(unsigned t=0; t!=nThreads-1; ++t)
         threads.push_back(std::thread(&parallel_for::run2<Function>, this, function, t));
-			run2<Function>(function, nThreads+1);
+			run2<Function>(function, nThreads-1);
 			for(std::thread& thr : threads)
 				thr.join();
 		}

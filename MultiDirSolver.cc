@@ -8,6 +8,8 @@
 #include <DPPP_DDECal/Matrix2x2.h>
 #endif
 
+#include "qrsolver.h"
+
 using namespace arma;
 
 MultiDirSolver::MultiDirSolver() :
@@ -346,8 +348,8 @@ MultiDirSolver::SolveResult MultiDirSolver::processFullMatrix(std::vector<Comple
   // Dimensions for each channelblock:
   // Model matrix ant x [2N x 2D] and visibility matrix ant x [2N x 2],
   // The following loop allocates all structures
-  std::vector<std::vector<cx_mat> > gTimesCs(_nChannelBlocks);
-  std::vector<std::vector<cx_mat> > vs(_nChannelBlocks);
+  std::vector<std::vector<Matrix> > gTimesCs(_nChannelBlocks);
+  std::vector<std::vector<Matrix> > vs(_nChannelBlocks);
   for(size_t chBlock=0; chBlock!=_nChannelBlocks; ++chBlock)
   {
     nextSolutions[chBlock].resize(_nDirections * _nAntennas * 4);
@@ -362,9 +364,11 @@ MultiDirSolver::SolveResult MultiDirSolver::processFullMatrix(std::vector<Comple
     {
       // Model matrix [2N x 2D] and visibility matrix [2N x 2]
       // Also space for the auto correlation is reserved, but they will be set to 0.
-      gTimesCs[chBlock][ant] = cx_mat(_nAntennas * nTimes * curChannelBlockSize * 2,
-                                      _nDirections * 2, fill::zeros);
-      vs[chBlock][ant] = cx_mat(_nAntennas * nTimes * curChannelBlockSize * 2, 2, fill::zeros);
+      // m = 2N, n = 2D, nrhs = 2
+      size_t m = _nAntennas * nTimes * curChannelBlockSize * 2;
+      size_t n = _nDirections * 2, nrhs = 2;
+      gTimesCs[chBlock][ant] = Matrix(m, n);
+      vs[chBlock][ant] = Matrix(std::max(n, m), nrhs);
     }
   }
   
@@ -413,8 +417,8 @@ MultiDirSolver::SolveResult MultiDirSolver::processFullMatrix(std::vector<Comple
 }
 
 void MultiDirSolver::performFullMatrixIteration(size_t channelBlockIndex,
-                             std::vector<arma::cx_mat>& gTimesCs,
-                             std::vector<arma::cx_mat>& vs,
+                             std::vector<Matrix>& gTimesCs,
+                             std::vector<Matrix>& vs,
                              const std::vector<DComplex>& solutions,
                              std::vector<DComplex>& nextSolutions,
                              const std::vector<Complex *>& data,
@@ -453,11 +457,13 @@ void MultiDirSolver::performFullMatrixIteration(size_t channelBlockIndex,
         // extra Herm transpose on M and V is required. The equation is:
         //   J_2 M^H J_1^H = V^H,
         // and the relevant matrices/index are called gTimesC1, v1 and dataIndex2.
-        cx_mat
+        Matrix
           &gTimesC1 = gTimesCs[antenna1],
           &v1 = vs[antenna1],
           &gTimesC2 = gTimesCs[antenna2],
           &v2 = vs[antenna2];
+        //std::cout << "vs:"<< v1.size() << "," << v2.size() << '\n';
+        //std::cout << "gs:"<< gTimesC1.size() << "," << gTimesC1.size() << '\n';
         for(size_t d=0; d!=_nDirections; ++d)
           modelPtrs[d] = modelData[timeIndex][d] + (channelIndexStart + baseline * _nChannels) * 4;
         const Complex* dataPtr = data[timeIndex] + (channelIndexStart + baseline * _nChannels) * 4;
@@ -495,14 +501,19 @@ void MultiDirSolver::performFullMatrixIteration(size_t channelBlockIndex,
     }
   }
   
-  // The matrices have been filled; compute the linear solution
-  // for each antenna.
-  ao::parallel_for<size_t>(0, _nAntennas, [&](size_t ant) {
-    cx_mat& gTimesC = gTimesCs[ant];
-    cx_mat& v = vs[ant];
+  size_t ncpus = 1;//ao::parallel_for<size_t>::NCPUs();
+  std::vector<QRSolver> solvers;
+  size_t m = _nAntennas * nTimes * curChannelBlockSize * 2;
+  size_t n = _nDirections * 2, nrhs = 2;
+  for(size_t i=0; i!=ncpus; ++i)
+    solvers.emplace_back(m, n, nrhs);
+
+  //ao::parallel_for<size_t>(0, _nAntennas, ncpus, [&](size_t ant, size_t thread) {
+  size_t thread = 0;
+  for(size_t ant=0; ant!=_nAntennas; ++ant) {
     // solve x^H in [g C] x^H  = v
-    cx_mat x;
-    const bool success = solve(x, gTimesC, v);
+    bool success = solvers[thread].Solve(gTimesCs[ant].data(), vs[ant].data());
+    Matrix& x = vs[ant];
     if(success)
     {
       for(size_t d=0; d!=_nDirections; ++d)
@@ -517,5 +528,5 @@ void MultiDirSolver::performFullMatrixIteration(size_t channelBlockIndex,
       for(size_t i=0; i!=_nDirections*4; ++i)
         nextSolutions[ant*_nDirections + i] = std::numeric_limits<double>::quiet_NaN();
     }
-  });
+  }
 }

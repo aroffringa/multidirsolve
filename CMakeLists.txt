@@ -4,7 +4,7 @@ project(mds)
 
 add_definitions(-DAOPROJECT)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -ggdb -Wall -march=native -std=c++11")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -ggdb -Wall -march=native -std=c++11 -DARMA_DONT_USE_WRAPPER")
 
 #if(NOT DISABLE_OMP)
 #  FIND_PACKAGE( OpenMP REQUIRED)
@@ -42,7 +42,7 @@ find_path(ARMADILLO_INCLUDE_DIR NAMES armadillo)
 include_directories(${ARMADILLO_INCLUDE_DIR})
 
 add_executable(mds mds.cc MultiDirSolver.cc Constraint.cc PhaseFitter.cc TECConstraint.cc stopwatch.cpp)
-target_link_libraries(mds ${ARMADILLO_LIB} ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(mds ${ARMADILLO_LIB} ${CMAKE_THREAD_LIBS_INIT} openblas)
 
 add_executable(fittec fittec.cc PhaseFitter.cc)
 

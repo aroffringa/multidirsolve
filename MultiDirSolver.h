@@ -4,14 +4,14 @@
 #ifdef AOPROJECT
 #include "PhaseFitter.h"
 #include "Constraint.h"
+#include "Stopwatch.h"
 #define UPTR std::unique_ptr
 #else
 #include <DPPP/PhaseFitter.h>
 #include <DPPP_DDECal/Constraint.h>
+#include <DPPP_DDECal/Stopwatch.h>
 #define UPTR std::auto_ptr
 #endif
-
-#include <armadillo>
 
 #include <complex>
 #include <vector>
@@ -22,6 +22,7 @@ class MultiDirSolver
 public:
   typedef std::complex<double> DComplex;
   typedef std::complex<float> Complex;
+  
   class Matrix : public std::vector<DComplex>
   {
   public:
@@ -36,8 +37,6 @@ public:
     {
       return (*this)[i + j*_m];
     }
-    void reshape(size_t m, size_t n) { _m = m; }
-    
   private:
     size_t _m;
   };
@@ -57,7 +56,7 @@ public:
   // mdata[i] is een pointer voor tijdstap i naar arrays van ndir model data pointers (elk van die data pointers staat in zelfde volgorde als data)
   // solutions[ch] is een pointer voor channelblock ch naar antenna x directions oplossingen.
   SolveResult processScalar(std::vector<Complex*>& data, std::vector<std::vector<Complex* > >& modelData,
-    std::vector<std::vector<DComplex> >& solutions, double time) const;
+    std::vector<std::vector<DComplex> >& solutions, double time);
   
   /**
    * Same as @ref processScalar(), but solves full Jones matrices.
@@ -68,7 +67,7 @@ public:
    */
   SolveResult processFullMatrix(std::vector<Complex *>& data,
     std::vector<std::vector<Complex *> >& modelData,
-    std::vector<std::vector<DComplex> >& solutions, double time) const;
+    std::vector<std::vector<DComplex> >& solutions, double time);
   
   void set_phase_only(bool phaseOnly) { _phaseOnly = phaseOnly; }
   
@@ -87,14 +86,16 @@ public:
   
   void add_constraint(Constraint* constraint) { _constraints.push_back(constraint); }
   
+  void showTimings (std::ostream& os, double duration) const;
+
 private:
   void performScalarIteration(size_t channelBlockIndex,
-                             std::vector<arma::cx_mat>& gTimesCs,
-                             std::vector<arma::cx_vec>& vs,
+                             std::vector<Matrix>& gTimesCs,
+                             std::vector<Matrix>& vs,
                              const std::vector<DComplex>& solutions,
                              std::vector<DComplex>& nextSolutions,
                              const std::vector<Complex *>& data,
-                             const std::vector<std::vector<Complex *> >& modelData) const;
+                             const std::vector<std::vector<Complex *> >& modelData);
                              
   void performFullMatrixIteration(size_t channelBlockIndex,
                              std::vector<Matrix>& gTimesCs,
@@ -102,7 +103,7 @@ private:
                              const std::vector<DComplex>& solutions,
                              std::vector<DComplex>& nextSolutions,
                              const std::vector<Complex *>& data,
-                             const std::vector<std::vector<Complex *> >& modelData) const;
+                             const std::vector<std::vector<Complex *> >& modelData);
 
   void makeStep(const std::vector<std::vector<DComplex> >& solutions,
     std::vector<std::vector<DComplex> >& nextSolutions) const;
@@ -125,6 +126,11 @@ private:
   double _stepSize;
   bool _phaseOnly;
   std::vector<Constraint*> _constraints;
+
+  // Timers
+  Stopwatch _timerSolve;
+  Stopwatch _timerConstrain;
+  Stopwatch _timerFillMatrices;
 };
 
 #endif

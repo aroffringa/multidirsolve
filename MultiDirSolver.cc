@@ -2,15 +2,15 @@
 #ifdef AOPROJECT
 #include "MultiDirSolver.h"
 #include "Matrix2x2.h"
-#include "parallel_for.h"
+#include "QRSolver.h"
 #else
 #include <DPPP_DDECal/MultiDirSolver.h>
 #include <DPPP_DDECal/Matrix2x2.h>
+#include <DPPP_DDECal/QRSolver.h>
 #endif
 
-#include "qrsolver.h"
-
-using namespace arma;
+#include <iomanip>
+#include <iostream>
 
 MultiDirSolver::MultiDirSolver() :
   _nAntennas(0),
@@ -44,7 +44,9 @@ void MultiDirSolver::makeStep(const std::vector<std::vector<DComplex> >& solutio
 {
   // Move the solutions towards nextSolutions
   // (the moved solutions are stored in 'nextSolutions')
-  ao::parallel_for<size_t>(0, _nChannelBlocks, [&](size_t chBlock) {
+#pragma omp parallel for
+  for(size_t chBlock=0; chBlock<_nChannelBlocks; ++chBlock)
+  {
     for(size_t i=0; i!=nextSolutions[chBlock].size(); ++i)
     {
       if(_phaseOnly)
@@ -62,7 +64,7 @@ void MultiDirSolver::makeStep(const std::vector<std::vector<DComplex> >& solutio
           nextSolutions[chBlock][i] * _stepSize;
       }
     }
-  });
+  }
 }
 
 void MultiDirSolver::makeSolutionsFinite(std::vector<std::vector<DComplex> >& solutions, size_t perPol) const
@@ -111,7 +113,7 @@ bool MultiDirSolver::assignSolutions(std::vector<std::vector<DComplex> >& soluti
 
 MultiDirSolver::SolveResult MultiDirSolver::processScalar(std::vector<Complex *>& data,
   std::vector<std::vector<Complex *> >& modelData,
-  std::vector<std::vector<DComplex> >& solutions, double time) const
+  std::vector<std::vector<DComplex> >& solutions, double time)
 {
   const size_t nTimes = data.size();
   SolveResult result;
@@ -123,7 +125,7 @@ MultiDirSolver::SolveResult MultiDirSolver::processScalar(std::vector<Complex *>
 
 #ifndef NDEBUG
   if (solutions.size() != _nChannelBlocks) {
-    cout << "Error: 'solutions' parameter does not have the right shape" << endl;
+    std::cout << "Error: 'solutions' parameter does not have the right shape\n";
     result.iterations = 0;
     return result;
   }
@@ -134,8 +136,8 @@ MultiDirSolver::SolveResult MultiDirSolver::processScalar(std::vector<Complex *>
   // Model matrix ant x [N x D] and visibility vector ant x [N x 1],
   // for each channelblock
   // The following loop allocates all structures
-  std::vector<std::vector<cx_mat> > gTimesCs(_nChannelBlocks);
-  std::vector<std::vector<cx_vec> > vs(_nChannelBlocks);
+  std::vector<std::vector<Matrix> > gTimesCs(_nChannelBlocks);
+  std::vector<std::vector<Matrix> > vs(_nChannelBlocks);
   for(size_t chBlock=0; chBlock!=_nChannelBlocks; ++chBlock)
   {
     nextSolutions[chBlock].resize(_nDirections * _nAntennas);
@@ -150,9 +152,11 @@ MultiDirSolver::SolveResult MultiDirSolver::processScalar(std::vector<Complex *>
     {
       // Model matrix [N x D] and visibility vector [N x 1]
       // Also space for the auto correlation is reserved, but they will be set to 0.
-      gTimesCs[chBlock][ant] = cx_mat(_nAntennas * nTimes * curChannelBlockSize * 4,
-                                      _nDirections, fill::zeros);
-      vs[chBlock][ant] = cx_vec(_nAntennas * nTimes * curChannelBlockSize * 4, fill::zeros);
+      size_t
+        m = _nAntennas * nTimes * curChannelBlockSize * 4,
+        n = _nDirections, nrhs = 1;
+      gTimesCs[chBlock][ant] = Matrix(m, n);
+      vs[chBlock][ant] = Matrix(std::max(m, n), nrhs);
     }
   }
   
@@ -170,15 +174,18 @@ MultiDirSolver::SolveResult MultiDirSolver::processScalar(std::vector<Complex *>
   do {
     makeSolutionsFinite(solutions, 1);
     
-  ao::parallel_for<size_t>(0, _nChannelBlocks, [&](size_t chBlock) {
+#pragma omp parallel for
+    for(size_t chBlock=0; chBlock<_nChannelBlocks; ++chBlock)
+    {
       performScalarIteration(chBlock, gTimesCs[chBlock], vs[chBlock],
                             solutions[chBlock], nextSolutions[chBlock],
                             data, modelData);
-    });
+    }
       
     makeStep(solutions, nextSolutions);
     
     constraintsSatisfied = true;
+    _timerConstrain.Start();
     for(size_t i=0; i!=_constraints.size(); ++i)
     {
       // PrepareIteration() might change Satisfied(), and since we always want to
@@ -188,6 +195,7 @@ MultiDirSolver::SolveResult MultiDirSolver::processScalar(std::vector<Complex *>
       _constraints[i]->PrepareIteration(hasPreviouslyConverged, iteration, iteration+1 >= _maxIterations);
       result._results[i] = _constraints[i]->Apply(nextSolutions, time);
     }
+    _timerConstrain.Pause();
     
     if(!constraintsSatisfied)
       constrainedIterations = iteration+1;
@@ -208,13 +216,14 @@ MultiDirSolver::SolveResult MultiDirSolver::processScalar(std::vector<Complex *>
 }
 
 void MultiDirSolver::performScalarIteration(size_t channelBlockIndex,
-                       std::vector<arma::cx_mat>& gTimesCs,
-                       std::vector<arma::cx_vec>& vs,
+                       std::vector<Matrix>& gTimesCs,
+                       std::vector<Matrix>& vs,
                        const std::vector<DComplex>& solutions,
                        std::vector<DComplex>& nextSolutions,
                        const std::vector<Complex *>& data,
-                       const std::vector<std::vector<Complex *> >& modelData) const
+                       const std::vector<std::vector<Complex *> >& modelData)
 {
+  _timerFillMatrices.Start();
   for(size_t ant=0; ant!=_nAntennas; ++ant)
   {
     gTimesCs[ant].zeros();
@@ -237,10 +246,10 @@ void MultiDirSolver::performScalarIteration(size_t channelBlockIndex,
       size_t antenna2 = _ant2[baseline];
       if(antenna1 != antenna2)
       {
-        cx_mat& gTimesC1 = gTimesCs[antenna1];
-        cx_vec& v1 = vs[antenna1];
-        cx_mat& gTimesC2 = gTimesCs[antenna2];
-        cx_vec& v2 = vs[antenna2];
+        Matrix& gTimesC1 = gTimesCs[antenna1];
+        Matrix& v1 = vs[antenna1];
+        Matrix& gTimesC2 = gTimesCs[antenna2];
+        Matrix& v2 = vs[antenna2];
         for(size_t d=0; d!=_nDirections; ++d)
           modelPtrs[d] = modelData[timeIndex][d] + (channelIndexStart + baseline * _nChannels) * 4;
         const Complex* dataPtr = data[timeIndex] + (channelIndexStart + baseline * _nChannels) * 4;
@@ -264,38 +273,42 @@ void MultiDirSolver::performScalarIteration(size_t channelBlockIndex,
               
               ++modelPtrs[d]; // Goto the next polarization of this 2x2 matrix.
             }
-            v1(dataIndex2*4+p2) = *dataPtr;
-            v2(dataIndex1*4+p1) = std::conj(*dataPtr);
+            v1(dataIndex2*4+p2, 0) = *dataPtr;
+            v2(dataIndex1*4+p1, 0) = std::conj(*dataPtr);
             ++dataPtr; // Goto the next polarization of this 2x2 matrix.
           }
         }
       }
     }
   }
+  _timerFillMatrices.Pause();
   
   // The matrices have been filled; compute the linear solution
   // for each antenna.
-  ao::parallel_for<size_t>(0, _nAntennas, [&](size_t ant) {
-    cx_mat& gTimesC = gTimesCs[ant];
-    cx_vec& v = vs[ant];
-    // solve [g* C] x  = v
-    cx_vec x;
-    bool success = solve(x, gTimesC, v);
+  _timerSolve.Start();
+  size_t m = _nAntennas * nTimes * curChannelBlockSize;
+  size_t n = _nDirections, nrhs = 1;
+  QRSolver solver(m, n, nrhs);
+  for(size_t ant=0; ant!=_nAntennas; ++ant) {
+    // solve x^H in [g C] x^H  = v
+    bool success = solver.Solve(gTimesCs[ant].data(), vs[ant].data());
+    Matrix& x = vs[ant];
     if(success)
     {
       for(size_t d=0; d!=_nDirections; ++d)
-        nextSolutions[ant*_nDirections + d] = x(d);
+        nextSolutions[ant*_nDirections + d] = x(d, 0);
     }
     else {
       for(size_t d=0; d!=_nDirections; ++d)
         nextSolutions[ant*_nDirections + d] = std::numeric_limits<double>::quiet_NaN();
     }
-  });
+  }
+  _timerSolve.Pause();
 }
 
 MultiDirSolver::SolveResult MultiDirSolver::processFullMatrix(std::vector<Complex *>& data,
   std::vector<std::vector<Complex *> >& modelData,
-  std::vector<std::vector<DComplex> >& solutions, double time) const
+  std::vector<std::vector<DComplex> >& solutions, double time)
 {
   // This algorithm is basically the same as the scalar algorithm,
   // but visibility values are extended to 2x2 matrices and concatenated
@@ -337,7 +350,7 @@ MultiDirSolver::SolveResult MultiDirSolver::processFullMatrix(std::vector<Comple
 
 #ifndef NDEBUG
   if (solutions.size() != _nChannelBlocks) {
-    cout << "Error: 'solutions' parameter does not have the right shape" << endl;
+    std::cout << "Error: 'solutions' parameter does not have the right shape\n";
     result.iterations = 0;
     return result;
   }
@@ -364,7 +377,6 @@ MultiDirSolver::SolveResult MultiDirSolver::processFullMatrix(std::vector<Comple
     {
       // Model matrix [2N x 2D] and visibility matrix [2N x 2]
       // Also space for the auto correlation is reserved, but they will be set to 0.
-      // m = 2N, n = 2D, nrhs = 2
       size_t m = _nAntennas * nTimes * curChannelBlockSize * 2;
       size_t n = _nDirections * 2, nrhs = 2;
       gTimesCs[chBlock][ant] = Matrix(m, n);
@@ -383,11 +395,13 @@ MultiDirSolver::SolveResult MultiDirSolver::processFullMatrix(std::vector<Comple
   do {
     makeSolutionsFinite(solutions, 4);
     
-    ao::parallel_for<size_t>(0, _nChannelBlocks, [&](size_t chBlock) {
+#pragma omp parallel for
+    for(size_t chBlock=0; chBlock<_nChannelBlocks; ++chBlock)
+    {
       performFullMatrixIteration(chBlock, gTimesCs[chBlock], vs[chBlock],
                                 solutions[chBlock], nextSolutions[chBlock],
                                 data, modelData);
-    });
+    }
       
     makeStep(solutions, nextSolutions);
     
@@ -422,7 +436,7 @@ void MultiDirSolver::performFullMatrixIteration(size_t channelBlockIndex,
                              const std::vector<DComplex>& solutions,
                              std::vector<DComplex>& nextSolutions,
                              const std::vector<Complex *>& data,
-                             const std::vector<std::vector<Complex *> >& modelData) const
+                             const std::vector<std::vector<Complex *> >& modelData)
 {
   for(size_t ant=0; ant!=_nAntennas; ++ant)
   {
@@ -437,6 +451,7 @@ void MultiDirSolver::performFullMatrixIteration(size_t channelBlockIndex,
     nTimes = data.size();
   
   // The following loop fills the matrices for all antennas
+  _timerFillMatrices.Start();
   for(size_t timeIndex=0; timeIndex!=nTimes; ++timeIndex)
   {
     std::vector<const Complex*> modelPtrs(_nDirections);
@@ -462,8 +477,6 @@ void MultiDirSolver::performFullMatrixIteration(size_t channelBlockIndex,
           &v1 = vs[antenna1],
           &gTimesC2 = gTimesCs[antenna2],
           &v2 = vs[antenna2];
-        //std::cout << "vs:"<< v1.size() << "," << v2.size() << '\n';
-        //std::cout << "gs:"<< gTimesC1.size() << "," << gTimesC1.size() << '\n';
         for(size_t d=0; d!=_nDirections; ++d)
           modelPtrs[d] = modelData[timeIndex][d] + (channelIndexStart + baseline * _nChannels) * 4;
         const Complex* dataPtr = data[timeIndex] + (channelIndexStart + baseline * _nChannels) * 4;
@@ -500,19 +513,19 @@ void MultiDirSolver::performFullMatrixIteration(size_t channelBlockIndex,
       }
     }
   }
+  _timerFillMatrices.Pause();
   
-  size_t ncpus = 1;//ao::parallel_for<size_t>::NCPUs();
-  std::vector<QRSolver> solvers;
+  // The matrices have been filled; compute the linear solution
+  // for each antenna.
+  _timerSolve.Start();
+
   size_t m = _nAntennas * nTimes * curChannelBlockSize * 2;
   size_t n = _nDirections * 2, nrhs = 2;
-  for(size_t i=0; i!=ncpus; ++i)
-    solvers.emplace_back(m, n, nrhs);
+  QRSolver solver(m, n, nrhs);
 
-  //ao::parallel_for<size_t>(0, _nAntennas, ncpus, [&](size_t ant, size_t thread) {
-  size_t thread = 0;
   for(size_t ant=0; ant!=_nAntennas; ++ant) {
     // solve x^H in [g C] x^H  = v
-    bool success = solvers[thread].Solve(gTimesCs[ant].data(), vs[ant].data());
+    bool success = solver.Solve(gTimesCs[ant].data(), vs[ant].data());
     Matrix& x = vs[ant];
     if(success)
     {
@@ -527,6 +540,18 @@ void MultiDirSolver::performFullMatrixIteration(size_t channelBlockIndex,
     else {
       for(size_t i=0; i!=_nDirections*4; ++i)
         nextSolutions[ant*_nDirections + i] = std::numeric_limits<double>::quiet_NaN();
+    }
+  }
+  _timerSolve.Pause();
+}
+
+void MultiDirSolver::showTimings (std::ostream& os, double duration) const {
+  //os << "                " << std::fixed << std::setprecision(2) << _timerSolve.Seconds()/duration << "% spent in solve" << std::endl;
+  //os << "                " << std::fixed << std::setprecision(2) << _timerFillMatrices.Seconds()/duration << "% spent in filling matrices" << std::endl;
+  if (!_constraints.empty()) {
+    os << "                " << std::fixed << std::setprecision(2) << _timerConstrain.Seconds()/duration << "% spent in constraints" << std::endl;
+    for (auto& constraint: _constraints) {
+      constraint->showTimings(os, duration);
     }
   }
 }

@@ -1,9 +1,12 @@
 #include "MultiDirSolver.h"
 #include "Matrix2x2.h"
 #include "TECConstraint.h"
-#include "qrsolver.h"
+#include "QRSolver.h"
 
-#include "stopwatch.h"
+#include "Stopwatch.h"
+
+#include <iostream>
+#include <random>
 
 void multidirtest()
 {
@@ -353,6 +356,6 @@ void testQRSolver()
 int main(int argc, char* argv[])
 {
   //testQRSolver();
-  //multidirtest();
-  testfulljones();
+  multidirtest();
+  //testfulljones();
 }

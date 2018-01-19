@@ -1,7 +1,6 @@
 #ifdef AOPROJECT
 #include "TECConstraint.h"
 #include "omptools.h"
-#include "parallel_for.h"
 #else
 #include <DPPP_DDECal/TECConstraint.h>
 #include <Common/OpenMP.h>
@@ -97,8 +96,15 @@ void TECConstraintBase::applyReferenceAntenna(std::vector<std::vector<dcomplex> 
 std::vector<Constraint::Result> TECConstraint::Apply(
     std::vector<std::vector<dcomplex> >& solutions, double)
 {
-  std::vector<Constraint::Result> res(2);
+  size_t nRes = 3;
+  if(_mode == TECOnlyMode) {
+    nRes = 2; // TEC and error
+  }
+  else {
+    nRes = 3; // TEC, phase and error
+  }
 
+  std::vector<Constraint::Result> res(nRes);
   res[0].vals.resize(_nAntennas*_nDirections);
   res[0].axes="ant,dir,freq";
   res[0].name="tec";
@@ -106,15 +112,26 @@ std::vector<Constraint::Result> TECConstraint::Apply(
   res[0].dims[0]=_nAntennas;
   res[0].dims[1]=_nDirections;
   res[0].dims[2]=1;
-  res[1]=res[0];
-  res[1].name="scalarphase";
+  if(_mode == TECAndCommonScalarMode) {
+    res[1]=res[0];
+    res[1].name="phase";
+  }
+  res.back()=res[0];
+  res.back().name="error";
 
   // Divide out the reference antenna
   applyReferenceAntenna(solutions);
   
-  size_t nCPUs = ao::parallel_for<size_t>::NCPUs();
-  ao::parallel_for<size_t>(0, _nAntennas*_nDirections, nCPUs, [&](size_t solutionIndex, size_t thread) {
-    
+#pragma omp parallel for
+  for(size_t solutionIndex = 0; solutionIndex<_nAntennas*_nDirections; ++solutionIndex)
+  {
+    size_t thread =
+#ifdef AOPROJECT
+        omp_get_thread_num();
+#else
+        LOFAR::OpenMP::threadNum();
+#endif
+
     for(size_t ch=0; ch!=_nChannelBlocks; ++ch) {
       if(std::isfinite(solutions[ch][solutionIndex].real()) &&
         std::isfinite(solutions[ch][solutionIndex].imag()))
@@ -130,19 +147,21 @@ std::vector<Constraint::Result> TECConstraint::Apply(
     
     double alpha, beta=0.0;
     if(_mode == TECOnlyMode) {
-      _phaseFitters[thread].FitDataToTEC1Model(alpha);
+      res.back().vals[solutionIndex]=_phaseFitters[thread].FitDataToTEC1Model(alpha);
     } else {
-      _phaseFitters[thread].FitDataToTEC2Model(alpha, beta);
+      res.back().vals[solutionIndex]=_phaseFitters[thread].FitDataToTEC2Model(alpha, beta);
     }
 
     res[0].vals[solutionIndex] = alpha / -8.44797245e9;
-    res[1].vals[solutionIndex] = beta;
+    if(_mode == TECAndCommonScalarMode) {
+      res[1].vals[solutionIndex] = beta;
+    }
     
     for(size_t ch=0; ch!=_nChannelBlocks; ++ch) 
     {
       solutions[ch][solutionIndex] = std::polar<double>(1.0, _phaseFitters[thread].PhaseData()[ch]);
     }
-  });
+  }
 
   return res;
 }
@@ -155,8 +174,14 @@ std::vector<Constraint::Result> ApproximateTECConstraint::Apply(
   else {
     applyReferenceAntenna(solutions);
     
-    size_t nCPUs = ao::parallel_for<size_t>::NCPUs();
-    ao::parallel_for<size_t>(0, _nAntennas*_nDirections, nCPUs, [&](size_t solutionIndex, size_t thread) {
+#pragma omp parallel for
+    for(size_t solutionIndex = 0; solutionIndex<_nAntennas*_nDirections; ++solutionIndex)
+    {
+#ifdef AOPROJECT
+      size_t thread = omp_get_thread_num();
+#else
+      size_t thread = LOFAR::OpenMP::threadNum();
+#endif
       std::vector<double>& data = _threadData[thread];
       std::vector<double>& fittedData = _threadFittedData[thread];
       std::vector<double>& weights = _threadWeights[thread];
@@ -181,7 +206,7 @@ std::vector<Constraint::Result> ApproximateTECConstraint::Apply(
       {
         solutions[ch][solutionIndex] = std::polar<double>(1.0, fittedData[ch]);
       }
-    });
+    }
 
     return std::vector<Constraint::Result>();
   }

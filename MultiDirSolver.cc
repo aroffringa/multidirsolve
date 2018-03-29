@@ -86,9 +86,11 @@ void MultiDirSolver::makeSolutionsFinite(std::vector<std::vector<DComplex> >& so
 }
 
 bool MultiDirSolver::assignSolutions(std::vector<std::vector<DComplex> >& solutions,
-  std::vector<std::vector<DComplex> >& nextSolutions, bool useConstraintAccuracy) const
+  std::vector<std::vector<DComplex> >& nextSolutions, bool useConstraintAccuracy,
+  double& sum, double& normSum) const
 {
-  double normSum = 0.0, sum = 0.0;
+  sum = 0.0;
+  normSum = 0.0;
   //  Calculate the norm of the difference between the old and new solutions
   size_t n = 0;
   for(size_t chBlock=0; chBlock<_nChannelBlocks; ++chBlock)
@@ -98,22 +100,23 @@ bool MultiDirSolver::assignSolutions(std::vector<std::vector<DComplex> >& soluti
     {
       double e = std::norm(nextSolutions[chBlock][i] - solutions[chBlock][i]);
       normSum += e;
-      sum += std::abs(solutions[chBlock][i]);
+      sum += std::norm(solutions[chBlock][i]);
       
       solutions[chBlock][i] = nextSolutions[chBlock][i];
     }
   }
-  normSum /= n;
   sum /= n;
+  normSum /= n;
   if(useConstraintAccuracy)
-    return normSum*_stepSize/sum <= _constraintAccuracy;
+    return sqrt(normSum/sum)*_stepSize <= _constraintAccuracy;
   else
-    return normSum*_stepSize/sum <= _accuracy;
+    return sqrt(normSum/sum)*_stepSize <= _accuracy;
 }
 
 MultiDirSolver::SolveResult MultiDirSolver::processScalar(std::vector<Complex *>& data,
   std::vector<std::vector<Complex *> >& modelData,
-  std::vector<std::vector<DComplex> >& solutions, double time)
+  std::vector<std::vector<DComplex> >& solutions, double time,
+  std::ostream* statStream)
 {
   const size_t nTimes = data.size();
   SolveResult result;
@@ -200,7 +203,12 @@ MultiDirSolver::SolveResult MultiDirSolver::processScalar(std::vector<Complex *>
     if(!constraintsSatisfied)
       constrainedIterations = iteration+1;
     
-    hasConverged = assignSolutions(solutions, nextSolutions, !constraintsSatisfied);
+    double sum, normSum;
+    hasConverged = assignSolutions(solutions, nextSolutions, !constraintsSatisfied, sum, normSum);
+    if(statStream != nullptr)
+    {
+      (*statStream) << iteration << '\t' << normSum*_stepSize/sum << '\t' << normSum << '\n';
+    }
     iteration++;
     
     hasPreviouslyConverged = hasConverged || hasPreviouslyConverged;
@@ -304,7 +312,8 @@ void MultiDirSolver::performScalarIteration(size_t channelBlockIndex,
 
 MultiDirSolver::SolveResult MultiDirSolver::processFullMatrix(std::vector<Complex *>& data,
   std::vector<std::vector<Complex *> >& modelData,
-  std::vector<std::vector<DComplex> >& solutions, double time)
+  std::vector<std::vector<DComplex> >& solutions, double time,
+  std::ostream* statStream)
 {
   // This algorithm is basically the same as the scalar algorithm,
   // but visibility values are extended to 2x2 matrices and concatenated
@@ -380,9 +389,6 @@ MultiDirSolver::SolveResult MultiDirSolver::processFullMatrix(std::vector<Comple
     }
   }
   
-  // TODO the data and model data needs to be preweighted.
-  // Maybe we can get a non-const pointer from DPPP, that saves copying/allocating
-  
   ///
   /// Start iterating
   ///
@@ -412,7 +418,12 @@ MultiDirSolver::SolveResult MultiDirSolver::processFullMatrix(std::vector<Comple
     if(!constraintsSatisfied)
       constrainedIterations = iteration+1;
     
-    hasConverged = assignSolutions(solutions, nextSolutions, !constraintsSatisfied);
+    double sum, normSum;
+    hasConverged = assignSolutions(solutions, nextSolutions, !constraintsSatisfied, sum, normSum);
+    if(statStream != nullptr)
+    {
+      (*statStream) << iteration << '\t' << normSum*_stepSize/sum << '\t' << normSum << '\n';
+    }
     iteration++;
     
     hasPreviouslyConverged = hasConverged || hasPreviouslyConverged;

@@ -120,7 +120,7 @@ void multidirtest()
     {
       for(auto& vec : solutions)
         vec.assign(nDir * nAnt, 1.0);
-      result = mds.processScalar(data, modelData, solutions, 0.0);
+      result = mds.processScalar(data, modelData, solutions, 0.0, nullptr);
       std::cout << '\n';
       for(size_t ch=0; ch!=nChanBlocks; ++ch)
       {
@@ -148,7 +148,7 @@ void multidirtest()
           vec[i * 4 + 3] = 1.0;
         }
       }
-      result = mds.processFullMatrix(data, modelData, solutions, 0.0);
+      result = mds.processFullMatrix(data, modelData, solutions, 0.0, nullptr);
       std::cout << '\n';
       for(size_t ch=0; ch!=nChanBlocks; ++ch)
       {
@@ -300,7 +300,7 @@ void testfulljones()
       vec[i * 4 + 3] = 1.0;
     }
   }
-  result = mds.processFullMatrix(data, modelData, solutions, 0.0);
+  result = mds.processFullMatrix(data, modelData, solutions, 0.0, nullptr);
   std::cout << '\n';
   for(size_t ch=0; ch!=nChanBlocks; ++ch)
   {

@@ -8,17 +8,11 @@
 
 TECConstraintBase::TECConstraintBase(Mode mode) :
   _mode(mode),
-  _nAntennas(0),
-  _nDirections(0),
-  _nChannelBlocks(0),
   _phaseFitters()
 {
 }
 
-void TECConstraintBase::initialize(size_t nAntennas, size_t nDirections, size_t nChannelBlocks, const double* frequencies) {
-  _nAntennas = nAntennas;
-  _nDirections = nDirections;
-  _nChannelBlocks = nChannelBlocks;
+void TECConstraintBase::initialize(const double* frequencies) {
   _phaseFitters.resize(
 #ifdef AOPROJECT
       omp_get_max_threads()
@@ -30,11 +24,15 @@ void TECConstraintBase::initialize(size_t nAntennas, size_t nDirections, size_t 
   for(size_t i=0; i!=_phaseFitters.size(); ++i)
   {
     _phaseFitters[i].SetChannelCount(_nChannelBlocks);
-    std::memcpy(_phaseFitters[i].FrequencyData(), frequencies, sizeof(double) * _nChannelBlocks);
-    
-    // TODO this should set the weights of the phase fitter!
+    std::memcpy(_phaseFitters[i].FrequencyData(), frequencies,
+                sizeof(double) * _nChannelBlocks);
   }
+  _weights.assign(_nChannelBlocks*_nAntennas, 1.0);
   initializeChild();
+}
+
+void TECConstraintBase::SetWeights(std::vector<double>& weights) {
+  _weights = weights;
 }
 
 void ApproximateTECConstraint::initializeChild()
@@ -94,7 +92,8 @@ void TECConstraintBase::applyReferenceAntenna(std::vector<std::vector<dcomplex> 
 }
 
 std::vector<Constraint::Result> TECConstraint::Apply(
-    std::vector<std::vector<dcomplex> >& solutions, double)
+    std::vector<std::vector<dcomplex> >& solutions, double,
+    std::ostream* statStream)
 {
   size_t nRes = 3;
   if(_mode == TECOnlyMode) {
@@ -125,6 +124,7 @@ std::vector<Constraint::Result> TECConstraint::Apply(
 #pragma omp parallel for
   for(size_t solutionIndex = 0; solutionIndex<_nAntennas*_nDirections; ++solutionIndex)
   {
+    size_t antennaIndex = solutionIndex/_nDirections;
     size_t thread =
 #ifdef AOPROJECT
         omp_get_thread_num();
@@ -132,12 +132,13 @@ std::vector<Constraint::Result> TECConstraint::Apply(
         LOFAR::OpenMP::threadNum();
 #endif
 
+    // Flag channels where calibration yielded inf or nan
     for(size_t ch=0; ch!=_nChannelBlocks; ++ch) {
       if(std::isfinite(solutions[ch][solutionIndex].real()) &&
         std::isfinite(solutions[ch][solutionIndex].imag()))
       {
         _phaseFitters[thread].PhaseData()[ch] = std::arg(solutions[ch][solutionIndex]);
-        _phaseFitters[thread].WeightData()[ch] = 1.0;
+        _phaseFitters[thread].WeightData()[ch] = _weights[antennaIndex*_nChannelBlocks + ch];
       }
       else {
         _phaseFitters[thread].PhaseData()[ch] = 0.0;
@@ -167,16 +168,18 @@ std::vector<Constraint::Result> TECConstraint::Apply(
 }
 
 std::vector<Constraint::Result> ApproximateTECConstraint::Apply(
-    std::vector<std::vector<dcomplex> >& solutions, double time)
+    std::vector<std::vector<dcomplex> >& solutions, double time,
+    std::ostream* statStream)
 {
   if(_finishedApproximateStage)
-    return TECConstraint::Apply(solutions, time);
+    return TECConstraint::Apply(solutions, time, statStream);
   else {
     applyReferenceAntenna(solutions);
     
 #pragma omp parallel for
     for(size_t solutionIndex = 0; solutionIndex<_nAntennas*_nDirections; ++solutionIndex)
     {
+      size_t antennaIndex = solutionIndex/_nDirections;
 #ifdef AOPROJECT
       size_t thread = omp_get_thread_num();
 #else
@@ -186,12 +189,13 @@ std::vector<Constraint::Result> ApproximateTECConstraint::Apply(
       std::vector<double>& fittedData = _threadFittedData[thread];
       std::vector<double>& weights = _threadWeights[thread];
       
+      // Flag channels where calibration yielded inf or nan
       for(size_t ch=0; ch!=_nChannelBlocks; ++ch) {
         if(std::isfinite(solutions[ch][solutionIndex].real()) &&
           std::isfinite(solutions[ch][solutionIndex].imag()))
         {
           data[ch] = std::arg(solutions[ch][solutionIndex]);
-          weights[ch] = 1.0;
+          weights[ch] = _weights[antennaIndex*_nChannelBlocks + ch];
         }
         else {
           data[ch] = 0.0;

@@ -82,10 +82,16 @@ public:
   void set_accuracy(double accuracy) {
     _accuracy = accuracy;
   }
+  double get_accuracy() const { return _accuracy; }
   void set_constraint_accuracy(double constraintAccuracy) {
     _constraintAccuracy = constraintAccuracy;
   }
   void set_step_size(double stepSize) { _stepSize = stepSize; }
+  double get_step_size() const { return _stepSize; }
+
+  void set_detect_stalling(bool detectStalling) { _detectStalling = detectStalling; }
+
+  bool get_detect_stalling() const { return _detectStalling; }
   
   void add_constraint(Constraint* constraint) { _constraints.push_back(constraint); }
   
@@ -110,18 +116,21 @@ private:
 
   void makeStep(const std::vector<std::vector<DComplex> >& solutions,
     std::vector<std::vector<DComplex> >& nextSolutions) const;
+
+  bool detectStall(size_t iteration, const std::vector<double>& step_magnitudes) const;
                 
   void makeSolutionsFinite(std::vector<std::vector<DComplex> >& solutions, size_t perPol) const;
                 
   /**
    * Assign the solutions in nextSolutions to the solutions.
-   * @returns whether the solutions have been converged.
+   * @returns whether the solutions have converged. Appends the current step magnitude to step_magnitudes
    */
   bool assignSolutions(
     std::vector<std::vector<DComplex> >& solutions,
     std::vector<std::vector<DComplex> >& nextSolutions,
     bool useConstraintAccuracy,
-    double& sum, double& normSum
+    double& sum, double& normSum,
+    std::vector<double>& step_magnitudes
   ) const;
                              
   size_t _nAntennas, _nDirections, _nChannels, _nChannelBlocks;
@@ -131,6 +140,7 @@ private:
   size_t _maxIterations;
   double _accuracy, _constraintAccuracy;
   double _stepSize;
+  bool _detectStalling;
   bool _phaseOnly;
   std::vector<Constraint*> _constraints;
 

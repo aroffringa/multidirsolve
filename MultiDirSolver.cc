@@ -87,7 +87,7 @@ void MultiDirSolver::makeSolutionsFinite(std::vector<std::vector<DComplex> >& so
 
 bool MultiDirSolver::assignSolutions(std::vector<std::vector<DComplex> >& solutions,
   std::vector<std::vector<DComplex> >& nextSolutions, bool useConstraintAccuracy,
-  double& sum, double& normSum) const
+  double& sum, double& normSum, std::vector<double>& step_magnitudes) const
 {
   sum = 0.0;
   normSum = 0.0;
@@ -107,10 +107,14 @@ bool MultiDirSolver::assignSolutions(std::vector<std::vector<DComplex> >& soluti
   }
   sum /= n;
   normSum /= n;
+
+  step_magnitudes.push_back(sqrt(normSum/sum)*_stepSize);
+
   if(useConstraintAccuracy)
     return sqrt(normSum/sum)*_stepSize <= _constraintAccuracy;
-  else
-    return sqrt(normSum/sum)*_stepSize <= _accuracy;
+  else {
+    return sqrt(normSum/sum)*_stepSize <= _accuracy; // Stepsize rechts???
+  }
 }
 
 MultiDirSolver::SolveResult MultiDirSolver::processScalar(std::vector<Complex *>& data,
@@ -173,7 +177,12 @@ MultiDirSolver::SolveResult MultiDirSolver::processScalar(std::vector<Complex *>
   bool
     hasConverged = false,
     hasPreviouslyConverged = false,
-    constraintsSatisfied = false;
+    constraintsSatisfied = false,
+    hasStalled = false;
+
+  std::vector<double> step_magnitudes;
+  step_magnitudes.reserve(_maxIterations);
+
   do {
     makeSolutionsFinite(solutions, 1);
     
@@ -189,6 +198,12 @@ MultiDirSolver::SolveResult MultiDirSolver::processScalar(std::vector<Complex *>
     
     constraintsSatisfied = true;
     _timerConstrain.Start();
+
+    if(statStream)
+    {
+      (*statStream) << iteration << '\t';
+    }
+
     for(size_t i=0; i!=_constraints.size(); ++i)
     {
       // PrepareIteration() might change Satisfied(), and since we always want to
@@ -196,7 +211,7 @@ MultiDirSolver::SolveResult MultiDirSolver::processScalar(std::vector<Complex *>
       // evaluate Satisfied() before preparing.
       constraintsSatisfied = _constraints[i]->Satisfied() && constraintsSatisfied;
       _constraints[i]->PrepareIteration(hasPreviouslyConverged, iteration, iteration+1 >= _maxIterations);
-      result._results[i] = _constraints[i]->Apply(nextSolutions, time);
+      result._results[i] = _constraints[i]->Apply(nextSolutions, time, statStream);
     }
     _timerConstrain.Pause();
     
@@ -204,16 +219,19 @@ MultiDirSolver::SolveResult MultiDirSolver::processScalar(std::vector<Complex *>
       constrainedIterations = iteration+1;
     
     double sum, normSum;
-    hasConverged = assignSolutions(solutions, nextSolutions, !constraintsSatisfied, sum, normSum);
-    if(statStream != nullptr)
+    hasConverged = assignSolutions(solutions, nextSolutions, !constraintsSatisfied, sum, normSum, step_magnitudes);
+    if(statStream)
     {
-      (*statStream) << iteration << '\t' << normSum*_stepSize/sum << '\t' << normSum << '\n';
+      (*statStream) << sqrt(normSum/sum)*_stepSize << '\t' << normSum << '\n';
     }
     iteration++;
     
     hasPreviouslyConverged = hasConverged || hasPreviouslyConverged;
-    
-  } while(iteration < _maxIterations && (!hasConverged || !constraintsSatisfied));
+
+    if (_detectStalling && constraintsSatisfied)
+      hasStalled = detectStall(iteration, step_magnitudes);
+
+  } while(iteration < _maxIterations && (!hasConverged || !constraintsSatisfied) && !hasStalled);
   
   if(hasConverged)
     result.iterations = iteration;
@@ -393,7 +411,14 @@ MultiDirSolver::SolveResult MultiDirSolver::processFullMatrix(std::vector<Comple
   /// Start iterating
   ///
   size_t iteration = 0, constrainedIterations = 0;
-  bool hasConverged = false, hasPreviouslyConverged = false, constraintsSatisfied = false;
+  bool hasConverged = false,
+       hasPreviouslyConverged = false,
+       constraintsSatisfied = false,
+       hasStalled = false;
+
+  std::vector<double> step_magnitudes;
+  step_magnitudes.reserve(_maxIterations);
+
   do {
     makeSolutionsFinite(solutions, 4);
     
@@ -406,35 +431,54 @@ MultiDirSolver::SolveResult MultiDirSolver::processFullMatrix(std::vector<Comple
     }
       
     makeStep(solutions, nextSolutions);
+
+    if(statStream)
+    {
+      (*statStream) << iteration << '\t';
+    }
     
     constraintsSatisfied = true;
     for(size_t i=0; i!=_constraints.size(); ++i)
     {
       constraintsSatisfied = _constraints[i]->Satisfied() && constraintsSatisfied;
       _constraints[i]->PrepareIteration(hasPreviouslyConverged, iteration, iteration+1 >= _maxIterations);
-      result._results[i] = _constraints[i]->Apply(nextSolutions, time);
+      result._results[i] = _constraints[i]->Apply(nextSolutions, time, statStream);
     }
     
     if(!constraintsSatisfied)
       constrainedIterations = iteration+1;
     
     double sum, normSum;
-    hasConverged = assignSolutions(solutions, nextSolutions, !constraintsSatisfied, sum, normSum);
-    if(statStream != nullptr)
+    hasConverged = assignSolutions(solutions, nextSolutions, !constraintsSatisfied, sum, normSum, step_magnitudes);
+    if(statStream)
     {
-      (*statStream) << iteration << '\t' << normSum*_stepSize/sum << '\t' << normSum << '\n';
+      (*statStream) << sqrt(normSum/sum)*_stepSize << '\t' << normSum << '\n';
     }
     iteration++;
     
     hasPreviouslyConverged = hasConverged || hasPreviouslyConverged;
-  } while(iteration < _maxIterations && (!hasConverged || !constraintsSatisfied));
-  
+
+    if (_detectStalling && constraintsSatisfied)
+      hasStalled = detectStall(iteration, step_magnitudes);
+
+  } while(iteration < _maxIterations && (!hasConverged || !constraintsSatisfied) && !hasStalled);
+ 
   if(hasConverged)
     result.iterations = iteration;
   else
     result.iterations = _maxIterations+1;
   result.constraintIterations = constrainedIterations;
   return result;
+}
+
+bool MultiDirSolver::detectStall(size_t iteration, const std::vector<double>& step_magnitudes) const
+{
+  if (iteration<30) {
+    return false;
+  } else {
+    return std::abs(step_magnitudes[iteration-1]/step_magnitudes[iteration-2]-1) < 1.e-4 &&
+           std::abs(step_magnitudes[iteration-2]/step_magnitudes[iteration-3]-1) < 1.e-4;
+  }
 }
 
 void MultiDirSolver::performFullMatrixIteration(size_t channelBlockIndex,

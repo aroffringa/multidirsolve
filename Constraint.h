@@ -5,6 +5,7 @@
 #include <memory>
 #include <set>
 #include <vector>
+#include <ostream>
 
 /**
  * This class is the base class for classes that implement a constraint on
@@ -21,6 +22,7 @@ public:
   {
   public:
     std::vector<double> vals;
+    std::vector<double> weights;
     std::string axes; // Comma-separated string with axis names, fastest varying last
     std::vector<size_t> dims;
     std::string name;
@@ -63,9 +65,32 @@ public:
    */
   virtual std::vector<Result> Apply(
     std::vector<std::vector<dcomplex> >& solutions,
-    double time) = 0;
+    double time, std::ostream* statStream) = 0;
+
+  /**
+  * Initialize the dimensions for the constraint. Should be overridden when
+  * something more than assigning dimensions is needed (e.g. resizing vectors).
+  * Weights are initialized to 1. here.
+  */
+  virtual void InitializeDimensions(size_t nAntennas,
+                                    size_t nDirections,
+                                    size_t nChannelBlocks)
+  {
+    _nAntennas = nAntennas;
+    _nDirections = nDirections;
+    _nChannelBlocks = nChannelBlocks;
+  }
+
+  /**
+   * Set weights. The vector should contain an array of size nAntennas * nChannelBlocks,
+   * where the channel index varies fastest.
+   */
+  virtual void SetWeights(std::vector<double> &) {}
 
   virtual void showTimings (std::ostream&, double) const {}
+
+protected:
+  size_t _nAntennas, _nDirections, _nChannelBlocks;
 };
 
 /**
@@ -79,7 +104,8 @@ public:
 
   virtual std::vector<Result> Apply(
                     std::vector<std::vector<dcomplex> >& solutions,
-                    double time);
+                    double time,
+                    std::ostream* statStream);
 };
 
 /**
@@ -93,7 +119,8 @@ public:
 
   virtual std::vector<Result> Apply(
                     std::vector<std::vector<dcomplex> >& solutions,
-                    double time);
+                    double time,
+                    std::ostream* statStream);
 };
 
 class DiagonalConstraint : public Constraint
@@ -103,7 +130,8 @@ public:
   
   virtual std::vector<Result> Apply(
                     std::vector<std::vector<dcomplex> >& solutions,
-                    double time);
+                    double time,
+                    std::ostream* statStream);
 private:
   const size_t _polsPerSolution;
 };
@@ -123,20 +151,17 @@ class CoreConstraint : public Constraint
 public:
   CoreConstraint() { }
 
-  void initialize(size_t nAntennas, size_t nDirections, size_t nChannelBlocks, const std::set<size_t>& coreAntennas)
+  void initialize(const std::set<size_t>& coreAntennas)
   {
-    _nAntennas = nAntennas;
-    _nDirections = nDirections;
-    _nChannelBlocks = nChannelBlocks;
     _coreAntennas = coreAntennas;
   }
   
   virtual std::vector<Result> Apply(
                     std::vector<std::vector<dcomplex> >& solutions,
-                    double time);
+                    double time,
+                    std::ostream* statStream);
   
 private:
-  size_t _nAntennas, _nDirections, _nChannelBlocks;
   std::set<size_t> _coreAntennas;
 };
 

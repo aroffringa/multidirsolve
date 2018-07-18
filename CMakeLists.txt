@@ -41,8 +41,9 @@ find_package(Threads REQUIRED)
 #find_path(ARMADILLO_INCLUDE_DIR NAMES armadillo)
 #include_directories(${ARMADILLO_INCLUDE_DIR})
 
-add_executable(mds mds.cc MultiDirSolver.cc Constraint.cc PhaseFitter.cc TECConstraint.cc Stopwatch.cc)
-target_link_libraries(mds ${CMAKE_THREAD_LIBS_INIT} openblas)
+add_executable(mds mds.cc MultiDirSolver.cc Constraint.cc PhaseFitter.cc SmoothnessConstraint.cc TECConstraint.cc Stopwatch.cc)
+target_link_libraries(mds ${CMAKE_THREAD_LIBS_INIT} lapack)
 
 add_executable(fittec fittec.cc PhaseFitter.cc)
 
+add_executable(kerneltest kerneltest.cc)

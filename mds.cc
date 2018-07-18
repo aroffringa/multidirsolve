@@ -2,6 +2,7 @@
 #include "Matrix2x2.h"
 #include "TECConstraint.h"
 #include "QRSolver.h"
+#include "KernelSmoother.h"
 
 #include "Stopwatch.h"
 
@@ -41,7 +42,7 @@ void multidirtest()
       nu[i] = i+1;
     
     TECConstraint tecConstraint(TECConstraint::TECOnlyMode);
-    tecConstraint.initialize(nAnt, nDir, nChanBlocks, nu.data());
+    tecConstraint.initialize(nu.data());
     
     cf gain1(0.31415926535, 0.0), gain2(2.0, 1.0), gain3(0.0, 3.0);
     std::vector<cf> inputSolutions(nAnt * nDir);

@@ -3,6 +3,7 @@
 #include "TECConstraint.h"
 #include "QRSolver.h"
 #include "KernelSmoother.h"
+#include "SmoothnessConstraint.h"
 
 #include "Stopwatch.h"
 
@@ -42,7 +43,15 @@ void multidirtest()
       nu[i] = i+1;
     
     TECConstraint tecConstraint(TECConstraint::TECOnlyMode);
+    tecConstraint.InitializeDimensions(nAnt, nDir, nChanBlocks);
     tecConstraint.initialize(nu.data());
+    
+    SmoothnessConstraint sConstraint(1e6);
+    sConstraint.InitializeDimensions(nAnt, nDir, nChanBlocks);
+    sConstraint.Initialize(nu.data());
+    sConstraint.SetWeights(std::vector<double>(nChanBlocks, 1.0));
+    
+    //mds.add_constraint(&sConstraint);
     
     cf gain1(0.31415926535, 0.0), gain2(2.0, 1.0), gain3(0.0, 3.0);
     std::vector<cf> inputSolutions(nAnt * nDir);

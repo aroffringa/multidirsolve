@@ -1,6 +1,7 @@
 #ifndef KERNEL_SMOOTHER_H
 #define KERNEL_SMOOTHER_H
 
+#include <cmath>
 #include <stdexcept>
 #include <vector>
 
@@ -8,22 +9,44 @@ template<typename DataType, typename NumType>
 class KernelSmoother
 {
 public:
-  KernelSmoother(const NumType* frequencies, size_t n, NumType kernelBandwidth) :
+  enum KernelType {
+    RectangularKernel,
+    TriangularKernel,
+    /** Gaussian, trimmed off at 3 sigma */
+    GaussianKernel,
+    /** The Epanechnikov kernel is a quadratic kernel, given by 3/4 (1 - x^2) */
+    EpanechnikovKernel
+  };
+  
+  KernelSmoother(const NumType* frequencies, size_t n, KernelType kernelType, NumType kernelBandwidth) :
     _frequencies(frequencies, frequencies+n),
     _scratch(n),
+    _kernelType(kernelType),
     _bandwidth(kernelBandwidth)
   {
   }
   
   NumType Kernel(NumType distance) const
   {
-    double x = distance / _bandwidth;
+    NumType x = distance / _bandwidth;
     if(x < NumType(-1.0) || x > NumType(1.0))
       return NumType(0.0);
     else {
-      // 3/4 * (1-x)^2;
-      x = NumType(1.0) - x;
-      return (NumType(3.0) / NumType(4.0)) * x * x;
+      switch(_kernelType)
+      {
+      case RectangularKernel:
+      default:
+        return NumType(0.5);
+      case TriangularKernel:
+        return x >= NumType(0.0) ? (NumType(1.0) - x) : (NumType(1.0) + x);
+      case GaussianKernel:
+        // e^(-x^2 / sigma^2), sigma = bandwidth / 3.
+        return std::exp(-x*x*NumType(9.0));
+      case EpanechnikovKernel:
+        // 3/4 * (1-x)^2;
+        x = NumType(1.0) - x;
+        return (NumType(3.0) / NumType(4.0)) * x * x;
+      }
     }
   }
   
@@ -70,6 +93,7 @@ public:
 private:
   std::vector<NumType> _frequencies;
   std::vector<DataType> _scratch;
+  enum KernelType _kernelType;
   NumType _bandwidth;
 };
 

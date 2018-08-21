@@ -117,7 +117,7 @@ private:
   void makeStep(const std::vector<std::vector<DComplex> >& solutions,
     std::vector<std::vector<DComplex> >& nextSolutions) const;
 
-  bool detectStall(size_t iteration, const std::vector<double>& step_magnitudes) const;
+  bool detectStall(size_t iteration, const std::vector<double>& stepMagnitudes) const;
                 
   void makeSolutionsFinite(std::vector<std::vector<DComplex> >& solutions, size_t perPol) const;
                 
@@ -125,11 +125,12 @@ private:
    * Assign the solutions in nextSolutions to the solutions.
    * @returns whether the solutions have converged. Appends the current step magnitude to step_magnitudes
    */
+  template<size_t NPol>
   bool assignSolutions(
     std::vector<std::vector<DComplex> >& solutions,
     std::vector<std::vector<DComplex> >& nextSolutions,
     bool useConstraintAccuracy,
-    double& sum, double& normSum,
+    double& sum,
     std::vector<double>& step_magnitudes
   ) const;
                              

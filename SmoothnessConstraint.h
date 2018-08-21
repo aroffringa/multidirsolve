@@ -8,15 +8,18 @@ class SmoothnessConstraint : public Constraint
 {
 public:
   typedef std::complex<double> dcomplex;
+  typedef KernelSmoother<dcomplex, double> Smoother;
   
-  SmoothnessConstraint(const double* frequencies, size_t n, double bandwidthHz);
+  SmoothnessConstraint(double bandwidthHz);
   
   std::vector<Constraint::Result> Apply(
     std::vector<std::vector<dcomplex> >& solutions, double, std::ostream* statStream) final override;
   
-  void SetWeights(std::vector<double> &weights) final override {
+  void SetWeights(const std::vector<double> &weights) final override {
     _weights = weights;
   }
+  
+  void Initialize(const double* frequencies);
   
   virtual void InitializeDimensions(size_t nAntennas,
                                     size_t nDirections,
@@ -24,17 +27,18 @@ public:
                                     
   struct FitData
   {
-    FitData(const double* frequencies, size_t n, double kernelBandwidth)
-      : smoother(frequencies, n, kernelBandwidth),
+    FitData(const double* frequencies, size_t n, Smoother::KernelType kernelType, double kernelBandwidth)
+      : smoother(frequencies, n, kernelType, kernelBandwidth),
       data(n), weight(n)
     { }
     
-    KernelSmoother<dcomplex, double> smoother;
+    Smoother smoother;
     std::vector<dcomplex> data;
     std::vector<double> weight;
   };
   std::vector<FitData> _fitData;
   std::vector<double> _frequencies, _weights;
+  Smoother::KernelType _kernelType;
   double _bandwidth;
 };
 

@@ -104,9 +104,9 @@ void MultiDirSolver::makeSolutionsFinite(std::vector<std::vector<DComplex> >& so
 template<size_t NPol>
 bool MultiDirSolver::assignSolutions(std::vector<std::vector<DComplex> >& solutions,
   std::vector<std::vector<DComplex> >& nextSolutions, bool useConstraintAccuracy,
-  double& avgSquaredDiff, std::vector<double>& stepMagnitudes) const
+  double& averageDifference, std::vector<double>& stepMagnitudes) const
 {
-  avgSquaredDiff = 0.0;
+  averageDifference = 0.0;
   //  Calculate the norm of the difference between the old and new solutions
   size_t n = 0;
   for(size_t chBlock=0; chBlock<_nChannelBlocks; ++chBlock)
@@ -114,29 +114,40 @@ bool MultiDirSolver::assignSolutions(std::vector<std::vector<DComplex> >& soluti
     n += solutions[chBlock].size();
     for(size_t i=0; i!=solutions[chBlock].size(); i += NPol)
     {
-      double nextSum, solSum;
+      // Here a normalized squared difference is calculated between the solutions of this
+      // and the previous step. 
       if(NPol == 1)
       {
-        solSum = std::abs(solutions[chBlock][i]);
-        nextSum = std::norm(nextSolutions[chBlock][i] - solutions[chBlock][i]);
+        // We avoid a couple of abs() calls for NPol == 1.
+        if(solutions[chBlock][i] != 0.0)
+          averageDifference += std::norm((nextSolutions[chBlock][i] - solutions[chBlock][i]) / solutions[chBlock][i]);
         solutions[chBlock][i] = nextSolutions[chBlock][i];
       }
       else {
-        solSum = std::abs(solutions[chBlock][i]) + std::abs(solutions[chBlock][i+3]);
-        nextSum = 0.0;
+        MC2x2 s(&solutions[chBlock][i]), sInv(s);
+        if(sInv.Invert())
+        {
+          MC2x2 n(&nextSolutions[chBlock][i]);
+          n -= s;
+          n *= sInv;
+          for(size_t p=0; p!=NPol; ++p)
+          {
+            averageDifference += std::norm(n[p]);
+          }
+        }
         for(size_t p=0; p!=NPol; ++p)
         {
-          nextSum += std::norm(nextSolutions[chBlock][i+p] - solutions[chBlock][i+p]);
           solutions[chBlock][i+p] = nextSolutions[chBlock][i+p];
         }
       }
-      if(solSum != 0.0)
-        avgSquaredDiff += nextSum/solSum;
     }
   }
-  avgSquaredDiff /= n;
+  if(NPol == 4)
+    averageDifference /= 0.5*n;
+  else
+    averageDifference /= n;
 
-  double stepMagnitude = sqrt(avgSquaredDiff)/_stepSize;
+  double stepMagnitude = sqrt(averageDifference)/_stepSize;
   stepMagnitudes.push_back(stepMagnitude);
 
   if(useConstraintAccuracy)

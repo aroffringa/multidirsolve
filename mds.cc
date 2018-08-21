@@ -52,19 +52,20 @@ void multidirtest()
     sConstraint.SetWeights(std::vector<double>(nChanBlocks, 1.0));
     
     //mds.add_constraint(&sConstraint);
+    double u = 1.0e4;
     
-    cf gain1(0.31415926535, 0.0), gain2(2.0, 1.0), gain3(0.0, 3.0);
+    cf gain1(0.31415926535*u, 0.0), gain2(2.0*u, 1.0*u), gain3(0.0, 3.0*u);
     std::vector<cf> inputSolutions(nAnt * nDir);
     for(size_t a=0; a!=nAnt; ++a)
     {
       if(a == 1)
       {
-        inputSolutions[a*nDir + 0] = 1.0;
-        inputSolutions[a*nDir + 1] = 1.0;
-        inputSolutions[a*nDir + 2] = 1.0;
+        inputSolutions[a*nDir + 0] = 1.0*u;
+        inputSolutions[a*nDir + 1] = 1.0*u;
+        inputSolutions[a*nDir + 2] = 1.0*u;
       }
       else {
-        inputSolutions[a*nDir + 0] = a;
+        inputSolutions[a*nDir + 0] = a*u;
         inputSolutions[a*nDir + 1] = gain2;
         inputSolutions[a*nDir + 2] = gain3;
       }

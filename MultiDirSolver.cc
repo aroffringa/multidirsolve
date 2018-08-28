@@ -112,7 +112,6 @@ bool MultiDirSolver::assignSolutions(std::vector<std::vector<DComplex> >& soluti
   size_t n = 0;
   for(size_t chBlock=0; chBlock<_nChannelBlocks; ++chBlock)
   {
-    n += solutions[chBlock].size();
     for(size_t i=0; i!=solutions[chBlock].size(); i += NPol)
     {
       // A normalized squared difference is calculated between the solutions of this
@@ -126,8 +125,13 @@ bool MultiDirSolver::assignSolutions(std::vector<std::vector<DComplex> >& soluti
       {
         if(solutions[chBlock][i] != 0.0)
         {
-          avgSquaredDiff += std::norm((nextSolutions[chBlock][i] - solutions[chBlock][i]) / solutions[chBlock][i]);
-          avgAbsDiff += std::abs((nextSolutions[chBlock][i] - solutions[chBlock][i]) / solutions[chBlock][i]);
+          double nrm = std::norm((nextSolutions[chBlock][i] - solutions[chBlock][i]) / solutions[chBlock][i]);
+          if(std::isfinite(nrm))
+          {
+            avgSquaredDiff += nrm;
+            avgAbsDiff += std::abs((nextSolutions[chBlock][i] - solutions[chBlock][i]) / solutions[chBlock][i]);
+            ++n;
+          }
         }
         solutions[chBlock][i] = nextSolutions[chBlock][i];
       }
@@ -135,13 +139,20 @@ bool MultiDirSolver::assignSolutions(std::vector<std::vector<DComplex> >& soluti
         MC2x2 s(&solutions[chBlock][i]), sInv(s);
         if(sInv.Invert())
         {
-          MC2x2 n(&nextSolutions[chBlock][i]);
-          n -= s;
-          n *= sInv;
+          MC2x2 ns(&nextSolutions[chBlock][i]);
+          ns -= s;
+          ns *= sInv;
+          double sumnrm = 0.0, sumabs = 0.0;
           for(size_t p=0; p!=NPol; ++p)
           {
-            avgSquaredDiff += std::norm(n[p]);
-            avgAbsDiff += std::abs(n[p]);
+            sumnrm += std::norm(ns[p]);
+            sumabs += std::abs(ns[p]);
+          }
+          if(std::isfinite(sumnrm))
+          {
+            avgSquaredDiff += sumnrm;
+            avgAbsDiff += sumabs;
+            n += 4;
           }
         }
         for(size_t p=0; p!=NPol; ++p)
@@ -160,8 +171,8 @@ bool MultiDirSolver::assignSolutions(std::vector<std::vector<DComplex> >& soluti
 
   // The stepsize is taken out, so that a small stepsize won't cause
   // a premature stopping criterion.
-  double stepMagnitude = avgSquaredDiff/_stepSize;
-  stepMagnitudes.emplace_back(avgAbsDiff/n);
+  double stepMagnitude = avgAbsDiff/n;
+  stepMagnitudes.emplace_back(avgSquaredDiff/_stepSize);
 
   if(useConstraintAccuracy)
     return stepMagnitude <= _constraintAccuracy;
@@ -283,10 +294,12 @@ MultiDirSolver::SolveResult MultiDirSolver::processScalar(std::vector<Complex *>
 
   } while(iteration < _maxIterations && (!hasConverged || !constraintsSatisfied) && !hasStalled);
   
-  if(hasConverged)
-    result.iterations = iteration;
+  // When we have not converged yet, we set the nr of iterations to the max+1, so that
+  // non-converged iterations can be distinguished from converged ones.
+  if((!hasConverged || !constraintsSatisfied) && !hasStalled)
+    result.iterations = iteration+1;
   else
-    result.iterations = _maxIterations+1;
+    result.iterations = iteration;
   result.constraintIterations = constrainedIterations;
   return result;
 }
@@ -513,10 +526,12 @@ MultiDirSolver::SolveResult MultiDirSolver::processFullMatrix(std::vector<Comple
 
   } while(iteration < _maxIterations && (!hasConverged || !constraintsSatisfied) && !hasStalled);
  
-  if(hasConverged)
-    result.iterations = iteration;
+  // When we have not converged yet, we set the nr of iterations to the max+1, so that
+  // non-converged iterations can be distinguished from converged ones.
+  if((!hasConverged || !constraintsSatisfied) && !hasStalled)
+    result.iterations = iteration+1;
   else
-    result.iterations = _maxIterations+1;
+    result.iterations = iteration;
   result.constraintIterations = constrainedIterations;
   return result;
 }

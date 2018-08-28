@@ -8,6 +8,7 @@
 #include "Stopwatch.h"
 
 #include <iostream>
+#include <fstream>
 #include <random>
 
 void multidirtest()
@@ -18,8 +19,8 @@ void multidirtest()
     watches[fullOrNot].Start();
     typedef std::complex<float> cf;
     MultiDirSolver mds;
-    mds.set_max_iterations(1000);
-    mds.set_accuracy(1e-7);
+    mds.set_max_iterations(100);
+    mds.set_accuracy(1e-10);
     mds.set_step_size(0.5);
     
     mds.set_phase_only(false);
@@ -52,7 +53,7 @@ void multidirtest()
     sConstraint.SetWeights(std::vector<double>(nChanBlocks, 1.0));
     
     //mds.add_constraint(&sConstraint);
-    double u = 1.0e4;
+    double u = 1.0;
     
     cf gain1(0.31415926535*u, 0.0), gain2(2.0*u, 1.0*u), gain3(0.0, 3.0*u);
     std::vector<cf> inputSolutions(nAnt * nDir);
@@ -131,7 +132,8 @@ void multidirtest()
     {
       for(auto& vec : solutions)
         vec.assign(nDir * nAnt, 1.0);
-      result = mds.processScalar(data, modelData, solutions, 0.0, nullptr);
+      std::ofstream file("convergence-scalar.txt");
+      result = mds.processScalar(data, modelData, solutions, 0.0, &file);
       std::cout << '\n';
       for(size_t ch=0; ch!=nChanBlocks; ++ch)
       {
@@ -159,7 +161,8 @@ void multidirtest()
           vec[i * 4 + 3] = 1.0;
         }
       }
-      result = mds.processFullMatrix(data, modelData, solutions, 0.0, nullptr);
+      std::ofstream file("convergence-full.txt");
+      result = mds.processFullMatrix(data, modelData, solutions, 0.0, &file);
       std::cout << '\n';
       for(size_t ch=0; ch!=nChanBlocks; ++ch)
       {

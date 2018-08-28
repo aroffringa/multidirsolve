@@ -18,8 +18,8 @@ MultiDirSolver::MultiDirSolver() :
   _nChannels(0),
   _nChannelBlocks(0),
   _maxIterations(100),
-  _accuracy(1e-4),
-  _constraintAccuracy(1e-3),
+  _accuracy(1e-5),
+  _constraintAccuracy(1e-4),
   _stepSize(0.2),
   _detectStalling(true),
   _phaseOnly(false)
@@ -104,9 +104,10 @@ void MultiDirSolver::makeSolutionsFinite(std::vector<std::vector<DComplex> >& so
 template<size_t NPol>
 bool MultiDirSolver::assignSolutions(std::vector<std::vector<DComplex> >& solutions,
   std::vector<std::vector<DComplex> >& nextSolutions, bool useConstraintAccuracy,
-  double& averageDifference, std::vector<double>& stepMagnitudes) const
+  double& avgSquaredDiff, std::vector<double>& stepMagnitudes) const
 {
-  averageDifference = 0.0;
+  avgSquaredDiff = 0.0;
+  double avgAbsDiff = 0.0;
   //  Calculate the norm of the difference between the old and new solutions
   size_t n = 0;
   for(size_t chBlock=0; chBlock<_nChannelBlocks; ++chBlock)
@@ -114,13 +115,20 @@ bool MultiDirSolver::assignSolutions(std::vector<std::vector<DComplex> >& soluti
     n += solutions[chBlock].size();
     for(size_t i=0; i!=solutions[chBlock].size(); i += NPol)
     {
-      // Here a normalized squared difference is calculated between the solutions of this
-      // and the previous step. 
+      // A normalized squared difference is calculated between the solutions of this
+      // and the previous step:
+      //   sqrt { 1/n sum over | (t1 - t0) t0^(-1) |_2 }
+      // This criterion is scale independent: all solutions can be scaled without
+      // affecting the number of iterations. Also, when the polarized version is given
+      // scalar matrices, it will use the same number of iterations as the scalar
+      // version.
       if(NPol == 1)
       {
-        // We avoid a couple of abs() calls for NPol == 1.
         if(solutions[chBlock][i] != 0.0)
-          averageDifference += std::norm((nextSolutions[chBlock][i] - solutions[chBlock][i]) / solutions[chBlock][i]);
+        {
+          avgSquaredDiff += std::norm((nextSolutions[chBlock][i] - solutions[chBlock][i]) / solutions[chBlock][i]);
+          avgAbsDiff += std::abs((nextSolutions[chBlock][i] - solutions[chBlock][i]) / solutions[chBlock][i]);
+        }
         solutions[chBlock][i] = nextSolutions[chBlock][i];
       }
       else {
@@ -132,7 +140,8 @@ bool MultiDirSolver::assignSolutions(std::vector<std::vector<DComplex> >& soluti
           n *= sInv;
           for(size_t p=0; p!=NPol; ++p)
           {
-            averageDifference += std::norm(n[p]);
+            avgSquaredDiff += std::norm(n[p]);
+            avgAbsDiff += std::abs(n[p]);
           }
         }
         for(size_t p=0; p!=NPol; ++p)
@@ -142,13 +151,17 @@ bool MultiDirSolver::assignSolutions(std::vector<std::vector<DComplex> >& soluti
       }
     }
   }
+  // The polarized version needs a factor of two normalization to make it work
+  // like the scalar version would and when given only scalar matrices.
   if(NPol == 4)
-    averageDifference /= 0.5*n;
+    avgSquaredDiff = sqrt(avgSquaredDiff*0.5/n) ;
   else
-    averageDifference /= n;
+    avgSquaredDiff = sqrt(avgSquaredDiff/n);
 
-  double stepMagnitude = sqrt(averageDifference)/_stepSize;
-  stepMagnitudes.push_back(stepMagnitude);
+  // The stepsize is taken out, so that a small stepsize won't cause
+  // a premature stopping criterion.
+  double stepMagnitude = avgSquaredDiff/_stepSize;
+  stepMagnitudes.emplace_back(avgAbsDiff/n);
 
   if(useConstraintAccuracy)
     return stepMagnitude <= _constraintAccuracy;

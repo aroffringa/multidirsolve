@@ -11,10 +11,6 @@ typedef std::complex<double> dcomplex;
 extern "C" void zgels_(char* trans, int* m, int* n, int* nrhs, dcomplex* a,
   int* lda, dcomplex* b, int* ldb, dcomplex* work, int* lwork, int* info);
 
-extern "C" void zgelsd_(int* m, int* n, int* nrhs, dcomplex* a, int* lda,
-  dcomplex* b, int* ldb, dcomplex* sdv, double* rcond, int* rank,
-  dcomplex* work, int* lwork, dcomplex* rwork, int* iwork, int* info);
-
 class QRSolver
 {
 public:

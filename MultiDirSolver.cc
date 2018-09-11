@@ -1,13 +1,7 @@
 
-#ifdef AOPROJECT
 #include "MultiDirSolver.h"
 #include "Matrix2x2.h"
 #include "QRSolver.h"
-#else
-#include <DPPP_DDECal/MultiDirSolver.h>
-#include <DPPP_DDECal/Matrix2x2.h>
-#include <DPPP_DDECal/QRSolver.h>
-#endif
 
 #include <iomanip>
 #include <iostream>
@@ -104,10 +98,9 @@ void MultiDirSolver::makeSolutionsFinite(std::vector<std::vector<DComplex> >& so
 template<size_t NPol>
 bool MultiDirSolver::assignSolutions(std::vector<std::vector<DComplex> >& solutions,
   std::vector<std::vector<DComplex> >& nextSolutions, bool useConstraintAccuracy,
-  double& avgSquaredDiff, std::vector<double>& stepMagnitudes) const
+  double& avgAbsDiff, std::vector<double>& stepMagnitudes) const
 {
-  avgSquaredDiff = 0.0;
-  double avgAbsDiff = 0.0;
+  avgAbsDiff = 0.0;
   //  Calculate the norm of the difference between the old and new solutions
   size_t n = 0;
   for(size_t chBlock=0; chBlock<_nChannelBlocks; ++chBlock)
@@ -125,11 +118,10 @@ bool MultiDirSolver::assignSolutions(std::vector<std::vector<DComplex> >& soluti
       {
         if(solutions[chBlock][i] != 0.0)
         {
-          double nrm = std::norm((nextSolutions[chBlock][i] - solutions[chBlock][i]) / solutions[chBlock][i]);
-          if(std::isfinite(nrm))
+          double a = std::abs((nextSolutions[chBlock][i] - solutions[chBlock][i]) / solutions[chBlock][i]);
+          if(std::isfinite(a))
           {
-            avgSquaredDiff += nrm;
-            avgAbsDiff += std::abs((nextSolutions[chBlock][i] - solutions[chBlock][i]) / solutions[chBlock][i]);
+            avgAbsDiff += a;
             ++n;
           }
         }
@@ -142,15 +134,13 @@ bool MultiDirSolver::assignSolutions(std::vector<std::vector<DComplex> >& soluti
           MC2x2 ns(&nextSolutions[chBlock][i]);
           ns -= s;
           ns *= sInv;
-          double sumnrm = 0.0, sumabs = 0.0;
+          double sumabs = 0.0;
           for(size_t p=0; p!=NPol; ++p)
           {
-            sumnrm += std::norm(ns[p]);
             sumabs += std::abs(ns[p]);
           }
-          if(std::isfinite(sumnrm))
+          if(std::isfinite(sumabs))
           {
-            avgSquaredDiff += sumnrm;
             avgAbsDiff += sumabs;
             n += 4;
           }
@@ -164,15 +154,15 @@ bool MultiDirSolver::assignSolutions(std::vector<std::vector<DComplex> >& soluti
   }
   // The polarized version needs a factor of two normalization to make it work
   // like the scalar version would and when given only scalar matrices.
-  if(NPol == 4)
-    avgSquaredDiff = sqrt(avgSquaredDiff*0.5/n) ;
-  else
-    avgSquaredDiff = sqrt(avgSquaredDiff/n);
+  //if(NPol == 4)
+  //  avgSquaredDiff = sqrt(avgSquaredDiff*0.5/n) ;
+  //else
+  //  avgSquaredDiff = sqrt(avgSquaredDiff/n);
 
   // The stepsize is taken out, so that a small stepsize won't cause
   // a premature stopping criterion.
-  double stepMagnitude = avgAbsDiff/n;
-  stepMagnitudes.emplace_back(avgSquaredDiff/_stepSize);
+  double stepMagnitude = (n==0 ? 0 : avgAbsDiff/_stepSize/n);
+  stepMagnitudes.emplace_back(stepMagnitude);
 
   if(useConstraintAccuracy)
     return stepMagnitude <= _constraintAccuracy;
@@ -379,7 +369,7 @@ void MultiDirSolver::performScalarIteration(size_t channelBlockIndex,
     // solve x^H in [g C] x^H  = v
     bool success = solver.Solve(gTimesCs[ant].data(), vs[ant].data());
     Matrix& x = vs[ant];
-    if(success)
+    if(success && x(0, 0) != 0.)
     {
       for(size_t d=0; d!=_nDirections; ++d)
         nextSolutions[ant*_nDirections + d] = x(d, 0);
@@ -643,7 +633,7 @@ void MultiDirSolver::performFullMatrixIteration(size_t channelBlockIndex,
     // solve x^H in [g C] x^H  = v
     bool success = solver.Solve(gTimesCs[ant].data(), vs[ant].data());
     Matrix& x = vs[ant];
-    if(success)
+    if(success && x(0, 0) != 0.)
     {
       for(size_t d=0; d!=_nDirections; ++d)
       {
@@ -654,8 +644,9 @@ void MultiDirSolver::performFullMatrixIteration(size_t channelBlockIndex,
       }
     }
     else {
-      for(size_t i=0; i!=_nDirections*4; ++i)
-        nextSolutions[ant*_nDirections + i] = std::numeric_limits<double>::quiet_NaN();
+      for(size_t i=0; i!=_nDirections*4; ++i) {
+        nextSolutions[ant*_nDirections*4 + i] = std::numeric_limits<double>::quiet_NaN();
+      }
     }
   }
   _timerSolve.Pause();

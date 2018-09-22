@@ -179,7 +179,6 @@ MultiDirSolver::SolveResult MultiDirSolver::processScalar(std::vector<Complex *>
   std::ostream* statStream)
 {
   const size_t nTimes = dataNoW.size();
-  SolveResult result;
   
   _buffer.CopyAndWeight(dataNoW, weights, modelDataNoW);
   
@@ -188,6 +187,7 @@ MultiDirSolver::SolveResult MultiDirSolver::processScalar(std::vector<Complex *>
   
   std::vector<std::vector<DComplex> > nextSolutions(_nChannelBlocks);
 
+  SolveResult result;
 #ifndef NDEBUG
   if (solutions.size() != _nChannelBlocks) {
     std::cout << "Error: 'solutions' parameter does not have the right shape\n";
@@ -385,9 +385,9 @@ void MultiDirSolver::performScalarIteration(size_t channelBlockIndex,
   }
 }
 
-MultiDirSolver::SolveResult MultiDirSolver::processFullMatrix(std::vector<Complex *>& data,
+MultiDirSolver::SolveResult MultiDirSolver::processFullMatrix(std::vector<Complex *>& dataNoW,
    std::vector<float*>& weights,
-   std::vector<std::vector<Complex *> >& modelData,
+   std::vector<std::vector<Complex *> >& modelDataNoW,
   std::vector<std::vector<DComplex> >& solutions, double time,
   std::ostream* statStream)
 {
@@ -421,14 +421,16 @@ MultiDirSolver::SolveResult MultiDirSolver::processFullMatrix(std::vector<Comple
   // With dimensions:
   //   [ 2N x 2D ] [ 2D x 2 ] = [ 2N x 2 ]
 
-  const size_t nTimes = data.size();
-  SolveResult result;
+  const size_t nTimes = dataNoW.size();
+  
+  _buffer.CopyAndWeight(dataNoW, weights, modelDataNoW);
   
   for(size_t i=0; i!=_constraints.size(); ++i)
     _constraints[i]->PrepareIteration(false, 0, false);
   
   std::vector<std::vector<DComplex> > nextSolutions(_nChannelBlocks);
 
+  SolveResult result;
 #ifndef NDEBUG
   if (solutions.size() != _nChannelBlocks) {
     std::cout << "Error: 'solutions' parameter does not have the right shape\n";
@@ -485,7 +487,7 @@ MultiDirSolver::SolveResult MultiDirSolver::processFullMatrix(std::vector<Comple
     {
       performFullMatrixIteration(chBlock, gTimesCs[chBlock], vs[chBlock],
                                 solutions[chBlock], nextSolutions[chBlock],
-                                data, modelData);
+                                _buffer.Data(), _buffer.ModelData());
     }
       
     makeStep(solutions, nextSolutions);
@@ -546,8 +548,8 @@ void MultiDirSolver::performFullMatrixIteration(size_t channelBlockIndex,
                              std::vector<Matrix>& vs,
                              const std::vector<DComplex>& solutions,
                              std::vector<DComplex>& nextSolutions,
-                             const std::vector<Complex *>& data,
-                             const std::vector<std::vector<Complex *> >& modelData)
+                             const std::vector<std::vector<Complex>>& data,
+                             const std::vector<std::vector<std::vector<Complex>>>& modelData)
 {
   for(size_t ant=0; ant!=_nAntennas; ++ant)
   {
@@ -589,8 +591,8 @@ void MultiDirSolver::performFullMatrixIteration(size_t channelBlockIndex,
           &gTimesC2 = gTimesCs[antenna2],
           &v2 = vs[antenna2];
         for(size_t d=0; d!=_nDirections; ++d)
-          modelPtrs[d] = modelData[timeIndex][d] + (channelIndexStart + baseline * _nChannels) * 4;
-        const Complex* dataPtr = data[timeIndex] + (channelIndexStart + baseline * _nChannels) * 4;
+          modelPtrs[d] = &modelData[timeIndex][d][(channelIndexStart + baseline * _nChannels) * 4];
+        const Complex* dataPtr = &data[timeIndex][(channelIndexStart + baseline * _nChannels) * 4];
         for(size_t ch=channelIndexStart; ch!=channelIndexEnd; ++ch)
         {
           const size_t

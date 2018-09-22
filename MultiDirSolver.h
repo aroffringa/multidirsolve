@@ -111,8 +111,8 @@ private:
                              std::vector<Matrix>& vs,
                              const std::vector<DComplex>& solutions,
                              std::vector<DComplex>& nextSolutions,
-                             const std::vector<Complex *>& data,
-                             const std::vector<std::vector<Complex *> >& modelData);
+                             const std::vector<std::vector<Complex>>& data,
+                             const std::vector<std::vector<std::vector<Complex>>>& modelData);
 
   void makeStep(const std::vector<std::vector<DComplex> >& solutions,
     std::vector<std::vector<DComplex> >& nextSolutions) const;

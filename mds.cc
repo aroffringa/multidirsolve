@@ -74,10 +74,12 @@ void multidirtest()
     
     //cf gain1(0.5*M_SQRT2, 0.5*M_SQRT2), gain2(0.0, 1.0), gain3(-0.5*M_SQRT2, -0.5*M_SQRT2);
     std::vector<cf*> data;
+    std::vector<float*> weights;
     std::vector<std::vector<cf*>> modelData;
     for(size_t timestep=0; timestep!=nTimes; ++timestep)
     {
       cf* dataPtr = new cf[nPol * nChan * nBl];
+      float* weightPtr = new float[nPol * nChan * nBl];
       cf* model1Ptr = new cf[nPol * nChan * nBl];
       cf* model2Ptr = new cf[nPol * nChan * nBl];
       cf* model3Ptr = new cf[nPol * nChan * nBl];
@@ -117,12 +119,14 @@ void multidirtest()
               gain1ant1 * std::conj(gain1ant2) * model1Ptr[baselineIndex] +
               gain2ant1 * std::conj(gain2ant2) * model2Ptr[baselineIndex] +
               gain3ant1 * std::conj(gain3ant2) * model3Ptr[baselineIndex];
+            weightPtr[baselineIndex] = 1.0;
             ++baselineIndex;
           }
         }
       }
       
       data.push_back(dataPtr);
+      weights.push_back(weightPtr);
       modelData.push_back(std::vector<cf*>{model1Ptr, model2Ptr, model3Ptr});
     }
     
@@ -133,7 +137,7 @@ void multidirtest()
       for(auto& vec : solutions)
         vec.assign(nDir * nAnt, 1.0);
       std::ofstream file("convergence-scalar.txt");
-      result = mds.processScalar(data, modelData, solutions, 0.0, &file);
+      result = mds.processScalar(data, weights, modelData, solutions, 0.0, &file);
       std::cout << '\n';
       for(size_t ch=0; ch!=nChanBlocks; ++ch)
       {
@@ -162,7 +166,7 @@ void multidirtest()
         }
       }
       std::ofstream file("convergence-full.txt");
-      result = mds.processFullMatrix(data, modelData, solutions, 0.0, &file);
+      result = mds.processFullMatrix(data, weights, modelData, solutions, 0.0, &file);
       std::cout << '\n';
       for(size_t ch=0; ch!=nChanBlocks; ++ch)
       {
@@ -191,6 +195,8 @@ void multidirtest()
       modelData.pop_back();
       delete[] data.back();
       data.pop_back();
+      delete[] weights.back();
+      weights.pop_back();
     }
     watches[fullOrNot].Pause();
   }
@@ -255,10 +261,12 @@ void testfulljones()
   }
   
   std::vector<cf*> data;
+  std::vector<float*> weights;
   std::vector<std::vector<cf*>> modelData;
   for(size_t timestep=0; timestep!=nTimes; ++timestep)
   {
     cf* dataPtr = new cf[nPol * nChan * nBl];
+    float* weightPtr = new float[nPol * nChan * nBl];
     cf* model1Ptr = new cf[nPol * nChan * nBl];
     
     for(size_t bl=0; bl!=nBl; ++bl)
@@ -291,13 +299,17 @@ void testfulljones()
           MC2x2::ATimesB(res, left, val);
           MC2x2::ATimesHermB(left, res, right); // left is used as scratch
           for(size_t p=0; p!=4; ++p)
+          {
             dataPtr[(baselineIndex*nChan + ch)*4 + p] = left[p];
+            weightPtr[(baselineIndex*nChan + ch)*4 + p] = 1.0;
+          }
         }
         ++baselineIndex;
       }
     }
     
     data.push_back(dataPtr);
+    weights.push_back(weightPtr);
     modelData.push_back(std::vector<cf*>{model1Ptr});
   }
   
@@ -314,7 +326,7 @@ void testfulljones()
       vec[i * 4 + 3] = 1.0;
     }
   }
-  result = mds.processFullMatrix(data, modelData, solutions, 0.0, nullptr);
+  result = mds.processFullMatrix(data, weights, modelData, solutions, 0.0, nullptr);
   std::cout << '\n';
   for(size_t ch=0; ch!=nChanBlocks; ++ch)
   {
@@ -340,6 +352,8 @@ void testfulljones()
     modelData.pop_back();
     delete[] data.back();
     data.pop_back();
+    delete[] weights.back();
+    weights.pop_back();
   }
 }
 

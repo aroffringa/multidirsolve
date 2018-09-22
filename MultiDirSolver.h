@@ -53,6 +53,7 @@ public:
   // mdata[i] is een pointer voor tijdstap i naar arrays van ndir model data pointers (elk van die data pointers staat in zelfde volgorde als data)
   // solutions[ch] is een pointer voor channelblock ch naar antenna x directions oplossingen.
   SolveResult processScalar(std::vector<Complex*>& data,
+    std::vector<float*>& weights,
     std::vector<std::vector<Complex* > >& modelData,
     std::vector<std::vector<DComplex> >& solutions, double time,
     std::ostream* statStream);
@@ -65,6 +66,7 @@ public:
    * antenna x directions solutions. Each solution consists of 4 complex values forming the full Jones matrix.
    */
   SolveResult processFullMatrix(std::vector<Complex *>& data,
+    std::vector<float*>& weights,
     std::vector<std::vector<Complex *> >& modelData,
     std::vector<std::vector<DComplex> >& solutions, double time,
     std::ostream* statStream);

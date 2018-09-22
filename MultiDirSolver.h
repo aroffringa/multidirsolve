@@ -8,6 +8,7 @@
 #endif
 
 #include "Constraint.h"
+#include "MultiDirBuffer.h"
 #include "Stopwatch.h"
 
 #include <complex>
@@ -102,8 +103,8 @@ private:
                              std::vector<Matrix>& vs,
                              const std::vector<DComplex>& solutions,
                              std::vector<DComplex>& nextSolutions,
-                             const std::vector<Complex *>& data,
-                             const std::vector<std::vector<Complex *> >& modelData);
+                             const std::vector<std::vector<Complex>>& data,
+                             const std::vector<std::vector<std::vector<Complex>>>& modelData);
                              
   void performFullMatrixIteration(size_t channelBlockIndex,
                              std::vector<Matrix>& gTimesCs,
@@ -135,6 +136,7 @@ private:
                              
   size_t _nAntennas, _nDirections, _nChannels, _nChannelBlocks;
   std::vector<int> _ant1, _ant2;
+  MultiDirBuffer _buffer;
   
   // Calibration setup
   size_t _maxIterations;

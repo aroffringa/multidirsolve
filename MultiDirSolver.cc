@@ -31,6 +31,7 @@ void MultiDirSolver::init(size_t nAntennas,
   _nChannelBlocks = nChannels;
   _ant1 = ant1;
   _ant2 = ant2;
+  _buffer.SetDimensions(nDirections, nChannels, ant1.size());
 }
 
 void MultiDirSolver::makeStep(const std::vector<std::vector<DComplex> >& solutions,
@@ -171,14 +172,16 @@ bool MultiDirSolver::assignSolutions(std::vector<std::vector<DComplex> >& soluti
   }
 }
 
-MultiDirSolver::SolveResult MultiDirSolver::processScalar(std::vector<Complex *>& data,
+MultiDirSolver::SolveResult MultiDirSolver::processScalar(std::vector<Complex *>& dataNoW,
    std::vector<float*>& weights,
-   std::vector<std::vector<Complex *> >& modelData,
+   std::vector<std::vector<Complex *> >& modelDataNoW,
   std::vector<std::vector<DComplex> >& solutions, double time,
   std::ostream* statStream)
 {
-  const size_t nTimes = data.size();
+  const size_t nTimes = dataNoW.size();
   SolveResult result;
+  
+  _buffer.CopyAndWeight(dataNoW, weights, modelDataNoW);
   
   for(size_t i=0; i!=_constraints.size(); ++i)
     _constraints[i]->PrepareIteration(false, 0, false);
@@ -243,7 +246,7 @@ MultiDirSolver::SolveResult MultiDirSolver::processScalar(std::vector<Complex *>
     {
       performScalarIteration(chBlock, gTimesCs[chBlock], vs[chBlock],
                             solutions[chBlock], nextSolutions[chBlock],
-                            data, modelData);
+                            _buffer.Data(), _buffer.ModelData());
     }
       
     makeStep(solutions, nextSolutions);
@@ -300,8 +303,8 @@ void MultiDirSolver::performScalarIteration(size_t channelBlockIndex,
                        std::vector<Matrix>& vs,
                        const std::vector<DComplex>& solutions,
                        std::vector<DComplex>& nextSolutions,
-                       const std::vector<Complex *>& data,
-                       const std::vector<std::vector<Complex *> >& modelData)
+                       const std::vector<std::vector<Complex>>& data,
+                       const std::vector<std::vector<std::vector<Complex>>>& modelData)
 {
   for(size_t ant=0; ant!=_nAntennas; ++ant)
   {
@@ -330,8 +333,8 @@ void MultiDirSolver::performScalarIteration(size_t channelBlockIndex,
         Matrix& gTimesC2 = gTimesCs[antenna2];
         Matrix& v2 = vs[antenna2];
         for(size_t d=0; d!=_nDirections; ++d)
-          modelPtrs[d] = modelData[timeIndex][d] + (channelIndexStart + baseline * _nChannels) * 4;
-        const Complex* dataPtr = data[timeIndex] + (channelIndexStart + baseline * _nChannels) * 4;
+          modelPtrs[d] = &modelData[timeIndex][d][(channelIndexStart + baseline * _nChannels) * 4];
+        const Complex* dataPtr = &data[timeIndex][(channelIndexStart + baseline * _nChannels) * 4];
         const size_t p1top2[4] = {0, 2, 1, 3};
         for(size_t ch=channelIndexStart; ch!=channelIndexEnd; ++ch)
         {

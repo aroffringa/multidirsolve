@@ -172,9 +172,10 @@ bool MultiDirSolver::assignSolutions(std::vector<std::vector<DComplex> >& soluti
   }
 }
 
-MultiDirSolver::SolveResult MultiDirSolver::processScalar(std::vector<Complex *>& dataNoW,
-   std::vector<float*>& weights,
-   std::vector<std::vector<Complex *> >& modelDataNoW,
+MultiDirSolver::SolveResult MultiDirSolver::processScalar(
+  const std::vector<Complex *>& dataNoW,
+  const std::vector<float*>& weights,
+  const std::vector<std::vector<Complex *> >& modelDataNoW,
   std::vector<std::vector<DComplex> >& solutions, double time,
   std::ostream* statStream)
 {
@@ -385,9 +386,10 @@ void MultiDirSolver::performScalarIteration(size_t channelBlockIndex,
   }
 }
 
-MultiDirSolver::SolveResult MultiDirSolver::processFullMatrix(std::vector<Complex *>& dataNoW,
-   std::vector<float*>& weights,
-   std::vector<std::vector<Complex *> >& modelDataNoW,
+MultiDirSolver::SolveResult MultiDirSolver::processFullMatrix(
+  const std::vector<Complex *>& dataNoW,
+  const std::vector<float*>& weights,
+  const std::vector<std::vector<Complex *> >& modelDataNoW,
   std::vector<std::vector<DComplex> >& solutions, double time,
   std::ostream* statStream)
 {
@@ -489,7 +491,7 @@ MultiDirSolver::SolveResult MultiDirSolver::processFullMatrix(std::vector<Comple
                                 solutions[chBlock], nextSolutions[chBlock],
                                 _buffer.Data(), _buffer.ModelData());
     }
-      
+    
     makeStep(solutions, nextSolutions);
 
     if(statStream)

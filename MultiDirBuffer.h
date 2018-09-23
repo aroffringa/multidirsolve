@@ -24,7 +24,7 @@ public:
     _nBaselines = nBaselines;
   }
   
-  void CopyAndWeight(std::vector<Complex *>& dataNoW, std::vector<float*>& weights, std::vector<std::vector<Complex *> >& modelDataNoW)
+  void CopyAndWeight(const std::vector<Complex *>& dataNoW, const std::vector<float*>& weights, const std::vector<std::vector<Complex *> >& modelDataNoW)
   {
     const size_t nTimes = dataNoW.size();
     _data.resize(nTimes);
